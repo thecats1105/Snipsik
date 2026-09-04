@@ -23,6 +23,7 @@ env:
   IMAGE_NAME: snipsik
   VM_NAME: snipsik
   VM_ZONE: us-central1-a
+  VM_USER: thecats1105
   CONTAINER_NAME: snipsik-bot
 
 jobs:
@@ -96,25 +97,25 @@ jobs:
           IMAGE_URI="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
 
           echo "==> Ensuring deployment directory exists on VM..."
-          gcloud compute ssh ${{ env.VM_NAME }} \
+          gcloud compute ssh ${{ env.VM_USER }}@${{ env.VM_NAME }} \
             --zone=${{ env.VM_ZONE }} \
             --project=${{ env.GCP_PROJECT_ID }} \
             --quiet \
-            --command="mkdir -p ~/snipsik"
+            --command="mkdir -p ~/snipsik && rm -f ~/snipsik/.env"
 
           echo "==> Uploading environment file and deployment script..."
-          gcloud compute scp .env.prod ${{ env.VM_NAME }}:~/snipsik/.env \
+          gcloud compute scp .env.prod ${{ env.VM_USER }}@${{ env.VM_NAME }}:~/snipsik/.env \
             --zone=${{ env.VM_ZONE }} \
             --project=${{ env.GCP_PROJECT_ID }} \
             --quiet
 
-          gcloud compute scp scripts/deploy.sh ${{ env.VM_NAME }}:~/snipsik/deploy.sh \
+          gcloud compute scp scripts/deploy.sh ${{ env.VM_USER }}@${{ env.VM_NAME }}:~/snipsik/deploy.sh \
             --zone=${{ env.VM_ZONE }} \
             --project=${{ env.GCP_PROJECT_ID }} \
             --quiet
 
           echo "==> Executing deployment script on VM..."
-          gcloud compute ssh ${{ env.VM_NAME }} \
+          gcloud compute ssh ${{ env.VM_USER }}@${{ env.VM_NAME }} \
             --zone=${{ env.VM_ZONE }} \
             --project=${{ env.GCP_PROJECT_ID }} \
             --quiet \
