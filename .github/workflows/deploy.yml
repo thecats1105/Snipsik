@@ -89,7 +89,7 @@ jobs:
             echo "Error: ENV_FILE secret is not configured in GitHub repository secrets!" >&2
             exit 1
           fi
-          echo "$APP_ENV" > .env.prod
+          printf '%s\n' "$APP_ENV" > .env.prod
           chmod 600 .env.prod
 
       - name: Deploy container to GCP VM via gcloud compute ssh
