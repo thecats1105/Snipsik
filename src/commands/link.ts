@@ -2,6 +2,7 @@ import {
   type AutocompleteInteraction,
   ChannelType,
   ChatInputCommandInteraction,
+  MessageFlags,
   PermissionFlagsBits,
   SlashCommandBuilder,
 } from "discord.js";
@@ -447,7 +448,9 @@ export const linkCommand: Command = {
 
       // 3. /link dashboard
       if (subcommand === "dashboard") {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({
+          flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+        });
         const stats = await fetchUserDashboardStats(interaction.user.id);
         const view = ui.createDashboardView(interaction.user, stats);
         await interaction.editReply(view);
@@ -462,7 +465,9 @@ export const linkCommand: Command = {
 
       // 5. /link create
       if (subcommand === "create") {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({
+          flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+        });
         const targetUrl = interaction.options.getString("url", true);
         const expStr = interaction.options.getString("expiration");
         const password = interaction.options.getString("password");
@@ -510,7 +515,9 @@ export const linkCommand: Command = {
 
       // 4. /link custom
       if (subcommand === "custom") {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({
+          flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+        });
         const targetUrl = interaction.options.getString("url", true);
         const customSlug = interaction.options.getString("custom_slug", true);
         const expStr = interaction.options.getString("expiration");
@@ -576,7 +583,9 @@ export const linkCommand: Command = {
 
       // 5. /link list
       if (subcommand === "list") {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({
+          flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+        });
         const inputTag = interaction.options.getString("tag")?.trim();
         const page = interaction.options.getInteger("page") || 1;
         const userHash = getUserHash(interaction.user.id);
@@ -659,7 +668,9 @@ export const linkCommand: Command = {
 
       // 6. /link stats
       if (subcommand === "stats") {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({
+          flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+        });
         const slug = interaction.options.getString("slug", true).trim();
 
         if (!verifyOwnership(slug, interaction.user.id)) {
@@ -688,7 +699,9 @@ export const linkCommand: Command = {
 
       // 7. /link delete
       if (subcommand === "delete") {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({
+          flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+        });
         const slug = interaction.options.getString("slug", true).trim();
 
         if (!verifyOwnership(slug, interaction.user.id)) {
@@ -720,7 +733,9 @@ export const linkCommand: Command = {
 
       // 8. /link check
       if (subcommand === "check") {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({
+          flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+        });
         const targetUrl = interaction.options.getString("url", true).trim();
 
         const checkResult = await sinkClient.checkUrlHealth(targetUrl);
@@ -786,7 +801,9 @@ async function handleWatchCommand(
     return;
   }
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({
+    flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+  });
 
   if (subcommand === "add") {
     const channel = interaction.options.getChannel("channel", true);
@@ -881,7 +898,9 @@ async function handleAdminCommand(
     return;
   }
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({
+    flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+  });
 
   // 1. /link admin overview
   if (subcommand === "overview") {
@@ -1151,7 +1170,9 @@ async function handleAdminCommand(
 async function handleConfigCommand(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({
+    flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+  });
 
   const key = interaction.options.getString("key")?.trim().toLowerCase();
   const value = interaction.options.getString("value")?.trim();

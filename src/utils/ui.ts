@@ -3,6 +3,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ContainerBuilder,
+  MessageFlags,
   SectionBuilder,
   SeparatorBuilder,
   StringSelectMenuBuilder,
@@ -26,11 +27,11 @@ export const COLORS = {
 };
 
 export interface V2MessageView {
-  embeds: [];
+  flags: MessageFlags.IsComponentsV2;
   components: ContainerBuilder[];
 }
 
-function safeDescription(text: unknown, maxLen = 4000): string {
+function safeDescription(text: unknown, maxLen = 3800): string {
   const str = typeof text === "string" ? text : String(text || "");
   if (str.length > maxLen) {
     return (
@@ -240,7 +241,7 @@ export const ui = {
       components.push(linkContainer);
     }
 
-    return { embeds: [], components };
+    return { flags: MessageFlags.IsComponentsV2, components };
   },
 
   /**
@@ -279,7 +280,7 @@ export const ui = {
       );
     container.addSectionComponents(openSection);
 
-    return { embeds: [], components: [container] };
+    return { flags: MessageFlags.IsComponentsV2, components: [container] };
   },
 
   /**
@@ -345,7 +346,7 @@ export const ui = {
       );
     container.addSectionComponents(openSection);
 
-    return { embeds: [], components: [container] };
+    return { flags: MessageFlags.IsComponentsV2, components: [container] };
   },
 
   /**
@@ -382,7 +383,7 @@ export const ui = {
       new TextDisplayBuilder().setContent(safeDescription(description)),
     );
 
-    return { embeds: [], components: [container] };
+    return { flags: MessageFlags.IsComponentsV2, components: [container] };
   },
 
   /**
@@ -395,7 +396,7 @@ export const ui = {
         `### ✅ ${title}\n${safeDescription(description)}`,
       ),
     );
-    return { embeds: [], components: [container] };
+    return { flags: MessageFlags.IsComponentsV2, components: [container] };
   },
 
   /**
@@ -408,7 +409,7 @@ export const ui = {
         `### ❌ ${title}\n${safeDescription(description || "오류가 발생했습니다.")}`,
       ),
     );
-    return { embeds: [], components: [container] };
+    return { flags: MessageFlags.IsComponentsV2, components: [container] };
   },
 
   /**
@@ -421,7 +422,7 @@ export const ui = {
         `### ℹ️ ${title}\n${safeDescription(description)}`,
       ),
     );
-    return { embeds: [], components: [container] };
+    return { flags: MessageFlags.IsComponentsV2, components: [container] };
   },
 
   /**
@@ -451,7 +452,7 @@ export const ui = {
     );
     container.addActionRowComponents(actionRow);
 
-    return { embeds: [], components: [container] };
+    return { flags: MessageFlags.IsComponentsV2, components: [container] };
   },
 
   /**
@@ -582,6 +583,6 @@ export const ui = {
     );
     container.addTextDisplayComponents(footerText);
 
-    return { embeds: [], components: [container] };
+    return { flags: MessageFlags.IsComponentsV2, components: [container] };
   },
 };

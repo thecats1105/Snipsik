@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { ui, COLORS } from "@/services/../utils/ui";
-import type { User } from "discord.js";
+import { MessageFlags, type User } from "discord.js";
 import type { UserDashboardStats } from "@/types/bot";
 import type { SinkLink, SinkStats } from "@/types/sink";
 
@@ -37,7 +37,7 @@ describe("Discord Components v2 UI Modules", () => {
   describe("createDashboardView", () => {
     it("renders single top overview container when no link is selected", () => {
       const view = ui.createDashboardView(mockUser, mockStats);
-      expect(view.embeds).toEqual([]);
+      expect(view.flags).toBe(MessageFlags.IsComponentsV2);
       expect(view.components.length).toBe(1);
 
       const topJson = view.components[0].toJSON();
@@ -47,7 +47,7 @@ describe("Discord Components v2 UI Modules", () => {
 
     it("renders 2-step split containers when a link is selected", () => {
       const view = ui.createDashboardView(mockUser, mockStats, "abc-1234");
-      expect(view.embeds).toEqual([]);
+      expect(view.flags).toBe(MessageFlags.IsComponentsV2);
       expect(view.components.length).toBe(2);
 
       const topJson = view.components[0].toJSON();
@@ -73,7 +73,7 @@ describe("Discord Components v2 UI Modules", () => {
         autoDmMode: "inherit",
         dmFormat: "replace",
       });
-      expect(view.embeds).toEqual([]);
+      expect(view.flags).toBe(MessageFlags.IsComponentsV2);
       expect(view.components.length).toBe(1);
 
       const json = view.components[0].toJSON();
@@ -87,6 +87,7 @@ describe("Discord Components v2 UI Modules", () => {
         { autoDmMode: "on", dmFormat: "list" },
         { title: "성공", description: "설정 저장됨", type: "success" },
       );
+      expect(view.flags).toBe(MessageFlags.IsComponentsV2);
       expect(view.components.length).toBe(1);
       const json = view.components[0].toJSON();
       expect(json.type).toBe(17);
@@ -97,7 +98,7 @@ describe("Discord Components v2 UI Modules", () => {
   describe("createDeleteConfirmView", () => {
     it("renders Danger accent colored container with delete buttons", () => {
       const view = ui.createDeleteConfirmView("abc-1234");
-      expect(view.embeds).toEqual([]);
+      expect(view.flags).toBe(MessageFlags.IsComponentsV2);
       expect(view.components.length).toBe(1);
 
       const json = view.components[0].toJSON();
@@ -114,7 +115,7 @@ describe("Discord Components v2 UI Modules", () => {
         clicks: 5,
       };
       const view = ui.createLinkCard(link);
-      expect(view.embeds).toEqual([]);
+      expect(view.flags).toBe(MessageFlags.IsComponentsV2);
       expect(view.components.length).toBe(1);
 
       const json = view.components[0].toJSON();
@@ -139,7 +140,7 @@ describe("Discord Components v2 UI Modules", () => {
         referrers: { discord: 50 },
       };
       const view = ui.createStatsCard(stats);
-      expect(view.embeds).toEqual([]);
+      expect(view.flags).toBe(MessageFlags.IsComponentsV2);
       expect(view.components.length).toBe(1);
 
       const json = view.components[0].toJSON();
@@ -162,7 +163,7 @@ describe("Discord Components v2 UI Modules", () => {
         "https://discord.com/channels/1/2/3",
         "replace",
       );
-      expect(view.embeds).toEqual([]);
+      expect(view.flags).toBe(MessageFlags.IsComponentsV2);
       expect(view.components.length).toBe(1);
 
       const json = view.components[0].toJSON();
@@ -176,10 +177,14 @@ describe("Discord Components v2 UI Modules", () => {
   });
 
   describe("Simple messages (Success, Error, Info)", () => {
-    it("renders Success and Info with Dark accent, Error with Danger accent", () => {
+    it("renders Success and Info with Dark accent, Error with Danger accent, with IsComponentsV2 flag", () => {
       const success = ui.createSuccessMessage("완료", "작업이 완료되었습니다.");
       const error = ui.createErrorMessage("에러", "작업 실패");
       const info = ui.createInfoMessage("안내", "참고 정보");
+
+      expect(success.flags).toBe(MessageFlags.IsComponentsV2);
+      expect(error.flags).toBe(MessageFlags.IsComponentsV2);
+      expect(info.flags).toBe(MessageFlags.IsComponentsV2);
 
       expect(success.components[0].toJSON().accent_color).toBe(COLORS.DARK);
       expect(error.components[0].toJSON().accent_color).toBe(COLORS.DANGER);
