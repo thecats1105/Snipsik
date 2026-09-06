@@ -8,8 +8,42 @@ import { sinkClient } from "@/services/sinkClient";
 import { ui } from "@/utils/ui";
 import { logger } from "@/utils/logger";
 
-// URL extraction regex
-const URL_REGEX = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
+// URL extraction regex (permits query string pipes | while excluding whitespace, angle/curly brackets, backticks, quotes, and backslashes)
+const URL_REGEX = /https?:\/\/[^\s<>"^`{}\\]+/gi;
+
+/**
+ * Trims trailing delimiters and formatting characters from extracted URLs.
+ * Handles Discord spoiler tags (||), unbalanced closing parentheses/brackets,
+ * while preserving valid query parameters and path structures.
+ *
+ * @param rawUrl - The raw extracted URL candidate.
+ * @returns The sanitized URL string.
+ */
+export function cleanExtractedUrl(rawUrl: string): string {
+  let url = rawUrl;
+
+  // 1. Strip trailing pipe characters (e.g. from Discord || spoiler tags)
+  while (url.endsWith("|")) {
+    url = url.slice(0, -1);
+  }
+
+  // 2. Strip unbalanced closing parentheses or brackets (e.g. "(https://...)" or "[https://...]")
+  while (url.endsWith(")") || url.endsWith("]")) {
+    const lastChar = url.slice(-1);
+    const openChar = lastChar === ")" ? "(" : "[";
+    const openCount = (url.match(new RegExp(`\\${openChar}`, "g")) || [])
+      .length;
+    const closeCount = (url.match(new RegExp(`\\${lastChar}`, "g")) || [])
+      .length;
+    if (closeCount > openCount) {
+      url = url.slice(0, -1);
+    } else {
+      break;
+    }
+  }
+
+  return url;
+}
 
 /**
  * Sanitizes a URL for logging by removing sensitive query parameters and fragments.
@@ -167,7 +201,8 @@ export async function onMessageCreate(message: Message): Promise<void> {
   const seenUrls = new Set<string>();
   const validUrls: string[] = [];
 
-  for (const rawUrl of matches) {
+  for (const rawMatch of matches) {
+    const rawUrl = cleanExtractedUrl(rawMatch);
     try {
       const parsedUrl = new URL(rawUrl);
 

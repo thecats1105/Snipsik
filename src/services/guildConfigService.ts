@@ -22,6 +22,25 @@ class GuildConfigService {
   // In-memory cache for O(1) sync lookups in messageCreate
   private cache: Map<string, GuildConfigData> = new Map();
   private cacheLoaded: boolean = false;
+  private isReloadingCache: boolean = false;
+
+  /**
+   * Triggers a non-blocking background attempt to reload guild configs cache if currently unloaded.
+   */
+  triggerBackgroundReload(): void {
+    if (this.isReloadingCache || this.cacheLoaded) return;
+    this.isReloadingCache = true;
+    this.loadCache()
+      .catch((err) => {
+        logger.warn(
+          "Background retry loading guild configs cache failed:",
+          err,
+        );
+      })
+      .finally(() => {
+        this.isReloadingCache = false;
+      });
+  }
 
   /**
    * Sets cache loaded status (used for testing or manual state control).
@@ -154,6 +173,9 @@ class GuildConfigService {
       };
 
       this.cache.set(guildId, savedConfig);
+      if (!this.cacheLoaded) {
+        this.triggerBackgroundReload();
+      }
       logger.info(
         `Updated guild config for ${guildId}: autoShortenEnabled=${savedConfig.autoShortenEnabled}, autoShortenMinUrlLength=${savedConfig.autoShortenMinUrlLength}`,
       );
@@ -191,6 +213,9 @@ class GuildConfigService {
     }
 
     if (guildId) {
+      if (!this.cacheLoaded) {
+        this.triggerBackgroundReload();
+      }
       const guildCfg = this.getGuildConfig(guildId);
       if (
         guildCfg.autoShortenMinUrlLength !== null &&

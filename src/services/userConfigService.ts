@@ -113,6 +113,22 @@ class UserConfigService {
   // In-memory cache for O(1) sync lookups in messageCreate
   private cache: Map<string, UserConfigData> = new Map();
   private cacheLoaded: boolean = false;
+  private isReloadingCache: boolean = false;
+
+  /**
+   * Triggers a non-blocking background attempt to reload user configs cache if currently unloaded.
+   */
+  triggerBackgroundReload(): void {
+    if (this.isReloadingCache || this.cacheLoaded) return;
+    this.isReloadingCache = true;
+    this.loadCache()
+      .catch((err) => {
+        logger.warn("Background retry loading user configs cache failed:", err);
+      })
+      .finally(() => {
+        this.isReloadingCache = false;
+      });
+  }
 
   /**
    * Sets cache loaded status (used for testing or manual state control).
@@ -262,6 +278,9 @@ class UserConfigService {
       };
 
       this.cache.set(userId, savedConfig);
+      if (!this.cacheLoaded) {
+        this.triggerBackgroundReload();
+      }
       logger.info(
         `Updated user config for ${userId}: autoDmMode=${savedConfig.autoDmMode}, dmFormat=${savedConfig.dmFormat}, autoShortenMinUrlLength=${savedConfig.autoShortenMinUrlLength}`,
       );
@@ -279,11 +298,13 @@ class UserConfigService {
   /**
    * Determines whether the bot should auto-shorten URLs and send DM to the user.
    * Fails closed (returns false) if the cache is not loaded to prevent privacy leaks.
+   * Schedules a background cache reload if cache is currently not loaded.
    */
   shouldProcessUser(userId: string, isChannelWatched: boolean): boolean {
     if (!this.cacheLoaded) {
+      this.triggerBackgroundReload();
       logger.warn(
-        `UserConfig cache not loaded; failing closed for user ${userId}`,
+        `UserConfig cache not loaded; failing closed for user ${userId} and scheduled background reload`,
       );
       return false;
     }
