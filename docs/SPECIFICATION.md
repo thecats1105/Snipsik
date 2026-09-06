@@ -104,10 +104,12 @@
 6. 작성자의 `userHash`를 부착한 슬러그로 Sink API에 단축 링크 생성 요청.
 7. 작성자의 **Discord DM**으로 2단계 포맷 메시지 발송.
 
-### 5.2 DM 메시지 전송 포맷
+### 5.2 DM 메시지 전송 포맷 및 임베드 억제 (Embed Suppression)
+
+- **임베드 억제 원칙**: 모든 DM 발송 메시지는 원본 메시지 텍스트를 `<URL>` 마크다운 문법으로 변형하지 않고, Discord API의 `SUPPRESS_EMBEDS` 플래그(`MessageFlags.SuppressEmbeds`)를 통해 클라이언트 임베드 X 버튼을 누른 것과 동일하게 임베드만 전면 제거하여 전송합니다. 전송 실패나 API 지연에 대비해 전송 후 fallback `suppressEmbeds(true)` 이중 보장을 수행합니다.
 
 1. **1차 메시지 (Components v2 카드)**:
-   - 원본 긴 URL 목록, 발송된 원본 메시지 링크(`message.url`), 생성 시각을 포함한 인터랙티브 안내 UI 카드.
+   - 원본 긴 URL 목록, 발송된 원본 메시지 링크(`message.url`), 생성 시각을 포함한 인터랙티브 안내 UI 카드 (`IsComponentsV2 | SuppressEmbeds`).
 2. **2차 메시지 (유저의 `dmFormat` 설정에 따른 분기)**:
-   - **`replace` 모드 (기본값)**: 원본 메시지 텍스트 본문에서 긴 URL들만 생성된 단축 URL로 정밀 치환한 완성형 본문 전송 (2,000자 초과 시 자동 분할 전송).
-   - **`list` 모드 (레거시/목록형)**: `<>` 기호나 기타 텍스트 없이 단축 URL 문자열만을 순차 전송 (모바일 Long-press 복사 최적화).
+   - **`replace` 모드 (기본값)**: 원본 메시지 텍스트 본문에서 긴 URL들만 생성된 단축 URL로 정밀 치환한 완성형 본문 전송 (2,000자 초과 시 자동 분할 전송, `flags: SuppressEmbeds`).
+   - **`list` 모드 (레거시/목록형)**: `<>` 기호나 기타 텍스트 없이 순수 단축 URL 문자열만을 순차 전송 (모바일 Long-press 복사 최적화, `flags: SuppressEmbeds`).

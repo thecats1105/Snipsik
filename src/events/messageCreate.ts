@@ -1,4 +1,4 @@
-import { Message } from "discord.js";
+import { Message, MessageFlags } from "discord.js";
 import { config } from "@/config";
 import { watchService } from "@/services/watchService";
 import { userConfigService } from "@/services/userConfigService";
@@ -137,7 +137,13 @@ export async function onMessageCreate(message: Message): Promise<void> {
 
       for (const chunk of chunks) {
         try {
-          await dmChannel.send(chunk);
+          const sentMsg = await dmChannel.send({
+            content: chunk,
+            flags: MessageFlags.SuppressEmbeds,
+          });
+          if (!sentMsg.flags.has(MessageFlags.SuppressEmbeds)) {
+            await sentMsg.suppressEmbeds(true).catch(() => {});
+          }
           textSentCount++;
         } catch (textErr) {
           logger.warn(
@@ -164,7 +170,13 @@ export async function onMessageCreate(message: Message): Promise<void> {
       // Legacy: Send Pure Plain Text URLs sequentially (Mobile Long-press copy optimization)
       for (const item of shortenedItems) {
         try {
-          await dmChannel.send(item.shortenedUrl);
+          const sentMsg = await dmChannel.send({
+            content: item.shortenedUrl,
+            flags: MessageFlags.SuppressEmbeds,
+          });
+          if (!sentMsg.flags.has(MessageFlags.SuppressEmbeds)) {
+            await sentMsg.suppressEmbeds(true).catch(() => {});
+          }
           textSentCount++;
         } catch (textErr) {
           logger.warn(
