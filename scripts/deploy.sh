@@ -10,6 +10,7 @@ BACKUP_CONTAINER="${CONTAINER_NAME}-backup"
 
 DOCKER="docker"
 HAS_OLD=0
+PREVIOUS_IMAGE_ID=""
 
 # -----------------------------------------------------------------------------
 # Helper Functions
@@ -94,6 +95,7 @@ prepare_container_backup() {
   container_exists "$BACKUP_CONTAINER" && has_backup=1
 
   if [ "$has_primary" -eq 1 ]; then
+    PREVIOUS_IMAGE_ID="$(dcmd inspect -f '{{.Image}}' "$CONTAINER_NAME" 2>/dev/null || true)"
     # Remove previous leftover backup only when primary container is available to be backed up
     dcmd rm -f "$BACKUP_CONTAINER" 2>/dev/null || true
     echo "Backing up existing container to ${BACKUP_CONTAINER}..."
@@ -101,6 +103,7 @@ prepare_container_backup() {
     dcmd stop "$BACKUP_CONTAINER" || true
     HAS_OLD=1
   elif [ "$has_backup" -eq 1 ]; then
+    PREVIOUS_IMAGE_ID="$(dcmd inspect -f '{{.Image}}' "$BACKUP_CONTAINER" 2>/dev/null || true)"
     # Preserve leftover backup as rollback target if primary container is missing
     echo "Warning: No primary container found, but found existing backup container. Preserving as rollback target."
     dcmd stop "$BACKUP_CONTAINER" || true
@@ -134,6 +137,16 @@ verify_health() {
   # Clean up backup container after successful verification
   if [ "$HAS_OLD" -eq 1 ]; then
     dcmd rm -f "$BACKUP_CONTAINER" 2>/dev/null || true
+  fi
+
+  # Clean up superseded image on VM if a new image was deployed
+  if [ -n "$PREVIOUS_IMAGE_ID" ]; then
+    local current_image_id
+    current_image_id="$(dcmd inspect -f '{{.Image}}' "$CONTAINER_NAME" 2>/dev/null || true)"
+    if [ -n "$current_image_id" ] && [ "$PREVIOUS_IMAGE_ID" != "$current_image_id" ]; then
+      echo "Cleaning up superseded container image (${PREVIOUS_IMAGE_ID})..."
+      dcmd rmi "$PREVIOUS_IMAGE_ID" 2>/dev/null || true
+    fi
   fi
 }
 
