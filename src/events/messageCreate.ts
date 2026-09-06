@@ -51,6 +51,29 @@ export function cleanExtractedUrl(
 }
 
 /**
+ * Checks whether two target URLs are identical, performing exact string match
+ * with WHATWG canonical fallback.
+ *
+ * @param urlA - First target URL candidate.
+ * @param urlB - Second target URL candidate.
+ * @returns True if both URLs refer to the exact same target URL.
+ */
+export function isSameTargetUrl(
+  urlA: string | null | undefined,
+  urlB: string | null | undefined,
+): boolean {
+  if (!urlA || !urlB) return false;
+  if (urlA === urlB) return true;
+  try {
+    const parsedA = new URL(urlA);
+    const parsedB = new URL(urlB);
+    return parsedA.href === parsedB.href;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Sanitizes a URL for logging by removing sensitive query parameters and fragments.
  *
  * @param rawUrl - The raw target URL.
@@ -107,8 +130,10 @@ async function resolveShortLink(
       });
 
       if (searchRes.success && searchRes.list && searchRes.list.length > 0) {
-        const userLinks = searchRes.list.filter((l) =>
-          verifyOwnership(l.slug, userId),
+        const userLinks = searchRes.list.filter(
+          (l) =>
+            verifyOwnership(l.slug, userId) &&
+            isSameTargetUrl(l.url, originalUrl),
         );
 
         if (userLinks.length > 0) {
