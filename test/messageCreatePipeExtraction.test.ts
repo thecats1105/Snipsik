@@ -54,8 +54,23 @@ describe("MessageCreate Pipe URL Extraction and Replacement", () => {
   describe("cleanExtractedUrl", () => {
     it("preserves query string pipes while stripping trailing Discord spoiler pipes", () => {
       const spoilerUrl = "https://example.com/search?a=1|2||";
-      expect(cleanExtractedUrl(spoilerUrl)).toBe(
+      expect(cleanExtractedUrl(spoilerUrl, true)).toBe(
         "https://example.com/search?a=1|2",
+      );
+    });
+
+    it("preserves legitimate trailing single pipe on URLs outside spoiler", () => {
+      const trailingPipeUrl = "https://example.com/query?filter=|";
+      expect(cleanExtractedUrl(trailingPipeUrl, false)).toBe(
+        "https://example.com/query?filter=|",
+      );
+    });
+
+    it("preserves legitimate trailing single pipe on URLs inside spoiler", () => {
+      // Inside spoiler with trailing pipe: candidate captured is URL + "||" -> "...?filter=|||"
+      const trailingPipeInsideSpoiler = "https://example.com/query?filter=|||";
+      expect(cleanExtractedUrl(trailingPipeInsideSpoiler, true)).toBe(
+        "https://example.com/query?filter=|",
       );
     });
 
@@ -169,6 +184,94 @@ describe("MessageCreate Pipe URL Extraction and Replacement", () => {
     expect(sentPayloads.length).toBe(2);
     expect(sentPayloads[1].content).toBe(
       `Secret: ||https://s.japsik.com/${createdSlug}|| check it`,
+    );
+  });
+
+  it("shortens and replaces trailing-pipe URLs outside spoiler without stripping trailing pipe", async () => {
+    const trailingPipeUrl = "https://example.com/query?filter=|";
+    const createdSlug = `pipeout-${testUserHash}`;
+    const createLinkMock = mock(async () => ({
+      success: true,
+      link: { slug: createdSlug, url: trailingPipeUrl },
+    }));
+    sinkClient.createLink = createLinkMock;
+
+    const sentPayloads: any[] = [];
+    const mockDmChannel = {
+      send: mock(async (payload: any) => {
+        sentPayloads.push(payload);
+        return {
+          flags: { has: () => true },
+          suppressEmbeds: async () => {},
+        };
+      }),
+    };
+
+    const mockMessage = {
+      author: {
+        id: testUserId,
+        bot: false,
+        tag: "Tester#0001",
+        createDM: async () => mockDmChannel,
+      },
+      guildId: testGuildId,
+      guild: {},
+      channelId: testChannelId,
+      channel: { name: "test-channel" },
+      content: `Check this link: ${trailingPipeUrl}`,
+      url: "https://discord.com/channels/1/2/3",
+    };
+
+    await onMessageCreate(mockMessage as any);
+
+    expect(createLinkMock).toHaveBeenCalledTimes(1);
+    expect(createLinkMock.mock.calls[0][0].url).toBe(trailingPipeUrl);
+    expect(sentPayloads[1].content).toBe(
+      `Check this link: https://s.japsik.com/${createdSlug}`,
+    );
+  });
+
+  it("shortens and replaces trailing-pipe URLs inside spoiler preserving both trailing pipe and spoiler markup", async () => {
+    const trailingPipeUrl = "https://example.com/query?filter=|";
+    const createdSlug = `pipein-${testUserHash}`;
+    const createLinkMock = mock(async () => ({
+      success: true,
+      link: { slug: createdSlug, url: trailingPipeUrl },
+    }));
+    sinkClient.createLink = createLinkMock;
+
+    const sentPayloads: any[] = [];
+    const mockDmChannel = {
+      send: mock(async (payload: any) => {
+        sentPayloads.push(payload);
+        return {
+          flags: { has: () => true },
+          suppressEmbeds: async () => {},
+        };
+      }),
+    };
+
+    const mockMessage = {
+      author: {
+        id: testUserId,
+        bot: false,
+        tag: "Tester#0001",
+        createDM: async () => mockDmChannel,
+      },
+      guildId: testGuildId,
+      guild: {},
+      channelId: testChannelId,
+      channel: { name: "test-channel" },
+      content: `Secret: ||${trailingPipeUrl}||`,
+      url: "https://discord.com/channels/1/2/3",
+    };
+
+    await onMessageCreate(mockMessage as any);
+
+    expect(createLinkMock).toHaveBeenCalledTimes(1);
+    expect(createLinkMock.mock.calls[0][0].url).toBe(trailingPipeUrl);
+    expect(sentPayloads[1].content).toBe(
+      `Secret: ||https://s.japsik.com/${createdSlug}||`,
     );
   });
 });
