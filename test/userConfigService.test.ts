@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
   normalizeAutoDmMode,
   normalizeDmFormat,
+  normalizeMinUrlLength,
   userConfigService,
   DEFAULT_USER_CONFIG,
 } from "@/services/userConfigService";
@@ -35,6 +36,68 @@ describe("UserConfigService Unit Tests", () => {
       expect(normalizeDmFormat("unknown")).toBeNull();
       expect(normalizeDmFormat(456)).toBeNull();
       expect(normalizeDmFormat(null)).toBeNull();
+    });
+
+    it("should normalize min URL length properly", () => {
+      // Inherit / Reset to null
+      expect(normalizeMinUrlLength(-1)).toEqual({ valid: true, value: null });
+      expect(normalizeMinUrlLength("-1")).toEqual({ valid: true, value: null });
+      expect(normalizeMinUrlLength("inherit")).toEqual({
+        valid: true,
+        value: null,
+      });
+      expect(normalizeMinUrlLength("DEFAULT")).toEqual({
+        valid: true,
+        value: null,
+      });
+      expect(normalizeMinUrlLength("reset")).toEqual({
+        valid: true,
+        value: null,
+      });
+      expect(normalizeMinUrlLength(null)).toEqual({ valid: true, value: null });
+      expect(normalizeMinUrlLength(undefined)).toEqual({
+        valid: true,
+        value: null,
+      });
+
+      // All URLs (0)
+      expect(normalizeMinUrlLength(0)).toEqual({ valid: true, value: 0 });
+      expect(normalizeMinUrlLength("0")).toEqual({ valid: true, value: 0 });
+      expect(normalizeMinUrlLength("all")).toEqual({ valid: true, value: 0 });
+
+      // Specific length (1 ~ 2048)
+      expect(normalizeMinUrlLength(1)).toEqual({ valid: true, value: 1 });
+      expect(normalizeMinUrlLength(70)).toEqual({ valid: true, value: 70 });
+      expect(normalizeMinUrlLength("70")).toEqual({ valid: true, value: 70 });
+      expect(normalizeMinUrlLength(2048)).toEqual({ valid: true, value: 2048 });
+      expect(normalizeMinUrlLength("2048")).toEqual({
+        valid: true,
+        value: 2048,
+      });
+
+      // Invalid inputs
+      expect(normalizeMinUrlLength(-2)).toEqual({ valid: false, value: null });
+      expect(normalizeMinUrlLength("-2")).toEqual({
+        valid: false,
+        value: null,
+      });
+      expect(normalizeMinUrlLength(2049)).toEqual({
+        valid: false,
+        value: null,
+      });
+      expect(normalizeMinUrlLength("2049")).toEqual({
+        valid: false,
+        value: null,
+      });
+      expect(normalizeMinUrlLength(3.14)).toEqual({
+        valid: false,
+        value: null,
+      });
+      expect(normalizeMinUrlLength("invalid")).toEqual({
+        valid: false,
+        value: null,
+      });
+      expect(normalizeMinUrlLength({})).toEqual({ valid: false, value: null });
     });
   });
 

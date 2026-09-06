@@ -47,23 +47,24 @@
 
 ### 3.1 `/link` 서브커맨드 및 서브커맨드 그룹
 
-| 명령어                 | 매개변수                                                                                                                                               | 설명                                                        | 권한                            |
-| :--------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------- | :------------------------------ |
-| `/link dashboard`      | 없음                                                                                                                                                   | 유저 개인 전용 일시성(Ephemeral) 인터랙티브 대시보드 열기   | 전체 유저                       |
-| `/link config`         | `key` (선택, Autocomplete)<br>`value` (선택, Autocomplete)                                                                                             | 개인별 URL 감시 오버라이드 및 DM 메시지 포맷 설정 조회/변경 | 전체 유저                       |
-| `/link create`         | `url` (필수)<br>`expiration` (선택, 초/분/시간 단위)<br>`password` (선택)<br>`tag` (선택)<br>`title` (선택)<br>`description` (선택)<br>`unsafe` (선택) | 일반 단축 링크 생성 (`{랜덤N}-{유저해시}`)                  | 전체 유저                       |
-| `/link custom`         | `url` (필수)<br>`custom_slug` (필수)<br>기타 옵션 동일                                                                                                 | 순수 커스텀 슬러그 링크 생성                                | `ADMIN_USER_IDS` 등록 유저 전용 |
-| `/link list`           | `tag` (선택)<br>`page` (선택, 기본 1)                                                                                                                  | 본인의 `userHash`가 포함된 생성 링크 목록 조회              | 전체 유저 (본인 링크만)         |
-| `/link stats`          | `slug` (필수)                                                                                                                                          | 특정 슬러그의 클릭 수 및 방문 통계 조회                     | 본인 소유 링크 또는 관리자      |
-| `/link delete`         | `slug` (필수)                                                                                                                                          | 단축 링크 영구 삭제                                         | 본인 소유 링크 또는 관리자      |
-| `/link check`          | `url` (필수)                                                                                                                                           | 대상 웹사이트의 생존 여부(HTTP 상태코드) 헬스체크           | 전체 유저                       |
-| `/link watch add`      | `channel` (필수)                                                                                                                                       | 해당 채널을 URL 감시 대상에 추가                            | 서버 관리자 (`ManageGuild`)     |
-| `/link watch remove`   | `channel` (필수)                                                                                                                                       | 해당 채널을 URL 감시 대상에서 제거                          | 서버 관리자 (`ManageGuild`)     |
-| `/link watch list`     | 없음                                                                                                                                                   | 현재 서버의 감시 대상 채널 목록 조회                        | 서버 관리자 (`ManageGuild`)     |
-| `/link admin overview` | 없음                                                                                                                                                   | Sink 인스턴스 전체 링크/클릭 종합 현황 및 TOP 5 링크 조회   | 봇 관리자 (`ADMIN_USER_IDS`)    |
-| `/link admin list`     | `tag` (선택)<br>`query` (선택, 검색어)<br>`page` (선택, 기본 1)                                                                                        | 인스턴스의 모든 단축 링크 목록 검색 및 페이징 조회          | 봇 관리자 (`ADMIN_USER_IDS`)    |
-| `/link admin user`     | `user` (필수)<br>`tag` (선택)<br>`page` (선택, 기본 1)                                                                                                 | 특정 대상 유저가 생성한 링크 목록 조회                      | 봇 관리자 (`ADMIN_USER_IDS`)    |
-| `/link admin delete`   | `slug` (필수)                                                                                                                                          | 소유권과 무관하게 지정한 슬러그 링크 강제 영구 삭제         | 봇 관리자 (`ADMIN_USER_IDS`)    |
+| 명령어                   | 매개변수                                                                                                                                               | 설명                                                                                  | 권한                            |
+| :----------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------ | :------------------------------ |
+| `/link dashboard`        | 없음                                                                                                                                                   | 유저 개인 전용 일시성(Ephemeral) 인터랙티브 대시보드 열기                             | 전체 유저                       |
+| `/link config`           | `key` (선택, Autocomplete)<br>`value` (선택, Autocomplete)                                                                                             | 개인별 URL 감시 오버라이드 및 DM 메시지 포맷 설정 조회/변경                           | 전체 유저                       |
+| `/link create`           | `url` (필수)<br>`expiration` (선택, 초/분/시간 단위)<br>`password` (선택)<br>`tag` (선택)<br>`title` (선택)<br>`description` (선택)<br>`unsafe` (선택) | 일반 단축 링크 생성 (`{랜덤N}-{유저해시}`)                                            | 전체 유저                       |
+| `/link custom`           | `url` (필수)<br>`custom_slug` (필수)<br>기타 옵션 동일                                                                                                 | 순수 커스텀 슬러그 링크 생성                                                          | `ADMIN_USER_IDS` 등록 유저 전용 |
+| `/link list`             | `tag` (선택)<br>`page` (선택, 기본 1)                                                                                                                  | 본인의 `userHash`가 포함된 생성 링크 목록 조회                                        | 전체 유저 (본인 링크만)         |
+| `/link stats`            | `slug` (필수)                                                                                                                                          | 특정 슬러그의 클릭 수 및 방문 통계 조회                                               | 본인 소유 링크 또는 관리자      |
+| `/link delete`           | `slug` (필수)                                                                                                                                          | 단축 링크 영구 삭제                                                                   | 본인 소유 링크 또는 관리자      |
+| `/link check`            | `url` (필수)                                                                                                                                           | 대상 웹사이트의 생존 여부(HTTP 상태코드) 헬스체크                                     | 전체 유저                       |
+| `/link watch add`        | `channel` (필수)                                                                                                                                       | 해당 채널을 URL 감시 대상에 추가                                                      | 서버 관리자 (`ManageGuild`)     |
+| `/link watch remove`     | `channel` (필수)                                                                                                                                       | 해당 채널을 URL 감시 대상에서 제거                                                    | 서버 관리자 (`ManageGuild`)     |
+| `/link watch list`       | 없음                                                                                                                                                   | 현재 서버의 감시 대상 채널 목록 조회                                                  | 서버 관리자 (`ManageGuild`)     |
+| `/link watch min-length` | `length` (선택, -1~2048)                                                                                                                               | 서버 내 URL 자동 단축 최소 길이 설정 및 조회 (-1: 초기화, 0: 전체, 1~2048: 지정 길이) | 서버 관리자 (`ManageGuild`)     |
+| `/link admin overview`   | 없음                                                                                                                                                   | Sink 인스턴스 전체 링크/클릭 종합 현황 및 TOP 5 링크 조회                             | 봇 관리자 (`ADMIN_USER_IDS`)    |
+| `/link admin list`       | `tag` (선택)<br>`query` (선택, 검색어)<br>`page` (선택, 기본 1)                                                                                        | 인스턴스의 모든 단축 링크 목록 검색 및 페이징 조회                                    | 봇 관리자 (`ADMIN_USER_IDS`)    |
+| `/link admin user`       | `user` (필수)<br>`tag` (선택)<br>`page` (선택, 기본 1)                                                                                                 | 특정 대상 유저가 생성한 링크 목록 조회                                                | 봇 관리자 (`ADMIN_USER_IDS`)    |
+| `/link admin delete`     | `slug` (필수)                                                                                                                                          | 소유권과 무관하게 지정한 슬러그 링크 강제 영구 삭제                                   | 봇 관리자 (`ADMIN_USER_IDS`)    |
 
 ---
 
@@ -85,13 +86,14 @@
 - **개인 설정 패널 (`Config Panel` / `/link config`)**:
   - `auto_dm` (자동 DM 수신 모드): `inherit` (서버 설정 따름, 기본값) / `on` (모든 채널에서 항상 켬) / `off` (항상 끔) 원클릭 토글.
   - `dm_format` (DM 메시지 포맷): `replace` (본문 치환, 기본값) / `list` (단축 URL 목록 나열) 원클릭 토글.
+  - `min_length` (최소 URL 길이): `상속 (-1)` / `전체 (0)` / `직접 입력... (모달)`을 통해 설정 가능 (기본값: 전역 70자 상속).
   - `[📊 대시보드로 이동]` 버튼을 통해 언제든지 메인 대시보드로 복귀 가능.
 
 ---
 
 ## 5. 채널 감시(Watcher) 및 유저 오버라이드 / DM 발송 규격
 
-### 5.1 감시 흐름 및 유저 오버라이드 결정
+### 5.1 감시 흐름 및 계층적 설정(Hierarchy) 결정
 
 1. `messageCreate` 이벤트 수신.
 2. 봇 자신의 메시지이거나 웹훅인 경우 무시.
@@ -100,9 +102,14 @@
    - `off`: 서버 감시 채널 여부와 무관하게 DM 발송 스킵.
    - `on`: 서버 감시 채널 등록 여부와 무관하게 봇이 접근 가능한 모든 채널에서 자동 감시 진행.
    - `inherit` (기본값): 서버 감시 채널(`isChannelWatched === true`)일 때만 진행.
-5. 메시지 본문에서 정규식(`https?://[^\s]+`)으로 유효 긴 URL 추출.
-6. 작성자의 `userHash`를 부착한 슬러그로 Sink API에 단축 링크 생성 요청.
-7. 작성자의 **Discord DM**으로 2단계 포맷 메시지 발송.
+5. **최소 URL 길이 3단계 계층 해석 (`resolveEffectiveMinUrlLength`)**:
+   - 1순위: 유저 개인 설정 (`user_configs.auto_shorten_min_url_length`가 null이 아닌 경우)
+   - 2순위: 서버(길드) 설정 (`guild_configs.auto_shorten_min_url_length`가 null이 아닌 경우)
+   - 3순위: 전역 환경변수 기본값 (`AUTO_SHORTEN_MIN_URL_LENGTH`, 기본 70)
+   - _값 규칙_: `-1`(상속/초기화), `0`(제한 없음/전체 단축), `1~2048`(지정 길이 이상 단축)
+6. 메시지 본문에서 정규식(`https?://[^\s]+`)으로 유효 URL 추출 후, 개별 URL마다 `url.length >= effectiveMinLength` 검사를 통과한 링크만 단축 대상에 포함.
+7. 작성자의 `userHash`를 부착한 슬러그로 Sink API에 단축 링크 생성 요청 (또는 기존 활성 링크 재사용).
+8. 작성자의 **Discord DM**으로 2단계 포맷 메시지 발송.
 
 ### 5.2 DM 메시지 전송 포맷 및 임베드 억제 (Embed Suppression)
 

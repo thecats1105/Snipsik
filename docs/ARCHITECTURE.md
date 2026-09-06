@@ -83,15 +83,16 @@ Snipsik/
 
 ## 3. 환경 변수 레퍼런스 (`.env`)
 
-| 환경 변수명          | 필수 여부 |         기본값         | 설명                                                      |
-| :------------------- | :-------: | :--------------------: | :-------------------------------------------------------- |
-| `DISCORD_TOKEN`      | **필수**  |           -            | 디스코드 봇 토큰                                          |
-| `DISCORD_CLIENT_ID`  | **필수**  |           -            | 디스코드 봇 애플리케이션 ID                               |
-| `DATABASE_URL`       | **필수**  |           -            | Supabase PostgreSQL 연결 문자열 (`postgresql://...`)      |
-| `SINK_BASE_URL`      | **필수**  | `https://s.japsik.com` | 배포된 Sink 인스턴스 도메인 주소                          |
-| `SINK_API_TOKEN`     | **필수**  |           -            | Sink 인스턴스의 `NUXT_SITE_TOKEN` (API Bearer 인증용)     |
-| `RANDOM_SLUG_LENGTH` |   선택    |          `3`           | 일반 링크 생성 시 앞자리 랜덤 문자열 길이 (2~16)          |
-| `ADMIN_USER_IDS`     |   선택    |          `""`          | `/link custom` 생성이 허용된 디스코드 유저 ID (콤마 구분) |
+| 환경 변수명                   | 필수 여부 |         기본값         | 설명                                                         |
+| :---------------------------- | :-------: | :--------------------: | :----------------------------------------------------------- |
+| `DISCORD_TOKEN`               | **필수**  |           -            | 디스코드 봇 토큰                                             |
+| `DISCORD_CLIENT_ID`           | **필수**  |           -            | 디스코드 봇 애플리케이션 ID                                  |
+| `DATABASE_URL`                | **필수**  |           -            | Supabase PostgreSQL 연결 문자열 (`postgresql://...`)         |
+| `SINK_BASE_URL`               | **필수**  | `https://s.japsik.com` | 배포된 Sink 인스턴스 도메인 주소                             |
+| `SINK_API_TOKEN`              | **필수**  |           -            | Sink 인스턴스의 `NUXT_SITE_TOKEN` (API Bearer 인증용)        |
+| `RANDOM_SLUG_LENGTH`          |   선택    |          `3`           | 일반 링크 생성 시 앞자리 랜덤 문자열 길이 (2~16)             |
+| `ADMIN_USER_IDS`              |   선택    |          `""`          | `/link custom` 생성이 허용된 디스코드 유저 ID (콤마 구분)    |
+| `AUTO_SHORTEN_MIN_URL_LENGTH` |   선택    |          `70`          | URL 자동 단축의 전역 최소 길이 기본값 (0: 전체 단축, 1~2048) |
 
 ---
 
@@ -114,6 +115,7 @@ export const userConfigs = pgTable("user_configs", {
   userId: text("user_id").primaryKey(),
   autoDmMode: text("auto_dm_mode").default("inherit").notNull(), // 'inherit' | 'on' | 'off'
   dmFormat: text("dm_format").default("replace").notNull(), // 'replace' | 'list'
+  autoShortenMinUrlLength: integer("auto_shorten_min_url_length"), // nullable, null: 상위 기본값 상속
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -126,6 +128,7 @@ export const userConfigs = pgTable("user_configs", {
 export const guildConfigs = pgTable("guild_configs", {
   guildId: text("guild_id").primaryKey(),
   autoShortenEnabled: boolean("auto_shorten_enabled").default(true).notNull(),
+  autoShortenMinUrlLength: integer("auto_shorten_min_url_length"), // nullable, null: 전역 기본값 상속
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),

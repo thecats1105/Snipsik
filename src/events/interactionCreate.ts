@@ -7,9 +7,17 @@ import {
 } from "@/commands/link";
 import { sinkClient } from "@/services/sinkClient";
 import { generateSlug, verifyOwnership } from "@/services/slugManager";
-import { userConfigService } from "@/services/userConfigService";
+import {
+  userConfigService,
+  normalizeMinUrlLength,
+} from "@/services/userConfigService";
+import { guildConfigService } from "@/services/guildConfigService";
 import { ui } from "@/utils/ui";
-import { createEditLinkModal, createLinkModal } from "@/utils/modals";
+import {
+  createEditLinkModal,
+  createLinkModal,
+  createMinLengthConfigModal,
+} from "@/utils/modals";
 import { parseExpiration } from "@/utils/time";
 import { logger } from "@/utils/logger";
 
@@ -185,7 +193,17 @@ export async function onInteractionCreate(
       // Open Config Panel from Dashboard
       if (customId === CustomId.DASHBOARD_CONFIG_BTN) {
         const userConfig = userConfigService.getUserConfig(interaction.user.id);
-        const view = ui.createConfigPanelView(interaction.user, userConfig);
+        const effectiveMinLength =
+          guildConfigService.resolveEffectiveMinUrlLength(
+            interaction.guildId,
+            interaction.user.id,
+          );
+        const view = ui.createConfigPanelView(
+          interaction.user,
+          userConfig,
+          undefined,
+          effectiveMinLength,
+        );
         await interaction.update(view);
         return;
       }
@@ -207,6 +225,12 @@ export async function onInteractionCreate(
           autoDmMode: targetMode,
         });
 
+        const effectiveMinLength =
+          guildConfigService.resolveEffectiveMinUrlLength(
+            interaction.guildId,
+            interaction.user.id,
+          );
+
         const notice = res.success
           ? undefined
           : {
@@ -220,6 +244,7 @@ export async function onInteractionCreate(
           interaction.user,
           res.config,
           notice,
+          effectiveMinLength,
         );
         await interaction.update(view);
         return;
@@ -237,6 +262,12 @@ export async function onInteractionCreate(
           dmFormat: targetFormat,
         });
 
+        const effectiveMinLength =
+          guildConfigService.resolveEffectiveMinUrlLength(
+            interaction.guildId,
+            interaction.user.id,
+          );
+
         const notice = res.success
           ? undefined
           : {
@@ -250,8 +281,88 @@ export async function onInteractionCreate(
           interaction.user,
           res.config,
           notice,
+          effectiveMinLength,
         );
         await interaction.update(view);
+        return;
+      }
+
+      // Config Toggle: Min URL Length (Inherit -1)
+      if (customId === CustomId.CONFIG_LEN_INHERIT) {
+        const res = await userConfigService.setUserConfig(interaction.user.id, {
+          autoShortenMinUrlLength: null,
+        });
+        const effectiveMinLength =
+          guildConfigService.resolveEffectiveMinUrlLength(
+            interaction.guildId,
+            interaction.user.id,
+          );
+
+        const notice = res.success
+          ? {
+              title: "설정 변경 완료",
+              description: `최소 URL 길이가 **상위 기본값 상속 (현재: ${effectiveMinLength}자)** (으)로 변경되었습니다.`,
+              type: "success" as const,
+            }
+          : {
+              title: "설정 변경 실패",
+              description:
+                res.error || "데이터베이스 저장 중 오류가 발생했습니다.",
+              type: "error" as const,
+            };
+
+        const view = ui.createConfigPanelView(
+          interaction.user,
+          res.config,
+          notice,
+          effectiveMinLength,
+        );
+        await interaction.update(view);
+        return;
+      }
+
+      // Config Toggle: Min URL Length (All 0)
+      if (customId === CustomId.CONFIG_LEN_ALL) {
+        const res = await userConfigService.setUserConfig(interaction.user.id, {
+          autoShortenMinUrlLength: 0,
+        });
+        const effectiveMinLength =
+          guildConfigService.resolveEffectiveMinUrlLength(
+            interaction.guildId,
+            interaction.user.id,
+          );
+
+        const notice = res.success
+          ? {
+              title: "설정 변경 완료",
+              description:
+                "최소 URL 길이가 **전체 단축 (제한 없음)** (으)로 변경되었습니다.",
+              type: "success" as const,
+            }
+          : {
+              title: "설정 변경 실패",
+              description:
+                res.error || "데이터베이스 저장 중 오류가 발생했습니다.",
+              type: "error" as const,
+            };
+
+        const view = ui.createConfigPanelView(
+          interaction.user,
+          res.config,
+          notice,
+          effectiveMinLength,
+        );
+        await interaction.update(view);
+        return;
+      }
+
+      // Config Toggle: Min URL Length (Custom Input Modal)
+      if (customId === CustomId.CONFIG_LEN_CUSTOM) {
+        const currentCfg = userConfigService.getUserConfig(interaction.user.id);
+        const modal = createMinLengthConfigModal(
+          currentCfg.autoShortenMinUrlLength,
+        );
+        await interaction.showModal(modal);
         return;
       }
 
@@ -430,6 +541,73 @@ export async function onInteractionCreate(
 
         const stats = await fetchUserDashboardStats(interaction.user.id);
         const view = ui.createDashboardView(interaction.user, stats, slug);
+        await interaction.editReply(view);
+        return;
+      }
+
+      // Modal: Min URL Length Config
+      if (interaction.customId === CustomId.MODAL_CONFIG_MIN_LENGTH) {
+        await interaction.deferUpdate();
+
+        const rawVal = interaction.fields.getTextInputValue("min_length");
+        const normalized = normalizeMinUrlLength(rawVal);
+        const effectiveMinLength =
+          guildConfigService.resolveEffectiveMinUrlLength(
+            interaction.guildId,
+            interaction.user.id,
+          );
+
+        if (!normalized.valid) {
+          const currentCfg = userConfigService.getUserConfig(
+            interaction.user.id,
+          );
+          const view = ui.createConfigPanelView(
+            interaction.user,
+            currentCfg,
+            {
+              title: "잘못된 설정 값",
+              description: `최소 URL 길이는 \`-1\`(상속), \`0\`(전체), 또는 \`1\`~ \`2048\`(지정 길이) 숫자여야 합니다.\n입력값: \`${rawVal}\``,
+              type: "error",
+            },
+            effectiveMinLength,
+          );
+          await interaction.editReply(view);
+          return;
+        }
+
+        const res = await userConfigService.setUserConfig(interaction.user.id, {
+          autoShortenMinUrlLength: normalized.value,
+        });
+        const updatedEffective =
+          guildConfigService.resolveEffectiveMinUrlLength(
+            interaction.guildId,
+            interaction.user.id,
+          );
+
+        const notice = res.success
+          ? {
+              title: "설정 변경 완료",
+              description:
+                normalized.value === null
+                  ? `최소 URL 길이가 **상위 기본값 상속 (현재: ${updatedEffective}자)** (으)로 변경되었습니다.`
+                  : normalized.value === 0
+                    ? "최소 URL 길이가 **전체 단축 (제한 없음)** (으)로 변경되었습니다."
+                    : `최소 URL 길이가 **최소 ${normalized.value}자 이상 단축** (으)로 변경되었습니다.`,
+              type: "success" as const,
+            }
+          : {
+              title: "설정 변경 실패",
+              description:
+                res.error || "데이터베이스 저장 중 오류가 발생했습니다.",
+              type: "error" as const,
+            };
+
+        const view = ui.createConfigPanelView(
+          interaction.user,
+          res.config,
+          notice,
+          updatedEffective,
+        );
         await interaction.editReply(view);
         return;
       }

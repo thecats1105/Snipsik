@@ -15,6 +15,11 @@ describe("Message Embed Suppression Workflow in DM Auto-Shortening", () => {
   beforeEach(() => {
     watchService.isWatched = () => true;
     userConfigService.shouldProcessUser = () => true;
+    userConfigService.getUserConfig = () => ({
+      autoDmMode: "inherit",
+      dmFormat: "replace",
+      autoShortenMinUrlLength: 0,
+    });
     sinkClient.createLink = async () => ({
       success: true,
       link: {
@@ -38,6 +43,7 @@ describe("Message Embed Suppression Workflow in DM Auto-Shortening", () => {
     userConfigService.getUserConfig = () => ({
       autoDmMode: "inherit",
       dmFormat: "replace",
+      autoShortenMinUrlLength: 0,
     });
 
     const sentPayloads: any[] = [];
@@ -102,6 +108,7 @@ describe("Message Embed Suppression Workflow in DM Auto-Shortening", () => {
     userConfigService.getUserConfig = () => ({
       autoDmMode: "inherit",
       dmFormat: "replace",
+      autoShortenMinUrlLength: 0,
     });
 
     const suppressEmbedsMock = mock(async () => {});
@@ -144,6 +151,7 @@ describe("Message Embed Suppression Workflow in DM Auto-Shortening", () => {
     userConfigService.getUserConfig = () => ({
       autoDmMode: "inherit",
       dmFormat: "replace",
+      autoShortenMinUrlLength: 0,
     });
 
     let callCount = 0;
@@ -188,6 +196,7 @@ describe("Message Embed Suppression Workflow in DM Auto-Shortening", () => {
     userConfigService.getUserConfig = () => ({
       autoDmMode: "inherit",
       dmFormat: "list",
+      autoShortenMinUrlLength: 0,
     });
 
     const sentPayloads: any[] = [];
@@ -233,6 +242,7 @@ describe("Message Embed Suppression Workflow in DM Auto-Shortening", () => {
     userConfigService.getUserConfig = () => ({
       autoDmMode: "inherit",
       dmFormat: "list",
+      autoShortenMinUrlLength: 0,
     });
 
     let callCount = 0;

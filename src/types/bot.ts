@@ -37,7 +37,11 @@ export const CustomId = {
   CONFIG_DM_OFF: "cfg:dm:off",
   CONFIG_FMT_REPLACE: "cfg:fmt:replace",
   CONFIG_FMT_LIST: "cfg:fmt:list",
+  CONFIG_LEN_INHERIT: "cfg:len:inherit",
+  CONFIG_LEN_ALL: "cfg:len:all",
+  CONFIG_LEN_CUSTOM: "cfg:len:custom",
   CONFIG_NAV_DASHBOARD: "cfg:nav:dash",
   MODAL_CREATE_LINK: "modal:create_link",
   MODAL_EDIT_LINK: "modal:edit_link",
+  MODAL_CONFIG_MIN_LENGTH: "modal:cfg:min_len",
 } as const;

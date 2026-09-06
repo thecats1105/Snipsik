@@ -2,6 +2,7 @@ import { Message, MessageFlags } from "discord.js";
 import { config } from "@/config";
 import { watchService } from "@/services/watchService";
 import { userConfigService } from "@/services/userConfigService";
+import { guildConfigService } from "@/services/guildConfigService";
 import { generateSlug, verifyOwnership } from "@/services/slugManager";
 import { sinkClient } from "@/services/sinkClient";
 import { ui } from "@/utils/ui";
@@ -157,6 +158,10 @@ export async function onMessageCreate(message: Message): Promise<void> {
   if (!matches || matches.length === 0) return;
 
   const sinkHostname = new URL(config.SINK_BASE_URL).hostname.toLowerCase();
+  const effectiveMinLength = guildConfigService.resolveEffectiveMinUrlLength(
+    message.guildId,
+    message.author.id,
+  );
 
   // 1. Extract valid URLs in order of appearance (deduplicating identical URLs while preserving order)
   const seenUrls = new Set<string>();
@@ -171,8 +176,8 @@ export async function onMessageCreate(message: Message): Promise<void> {
         continue;
       }
 
-      // Skip very short URLs (e.g. less than 15 chars) to avoid unnecessary shortening
-      if (rawUrl.length < 15) {
+      // Skip URLs shorter than effective minimum length
+      if (rawUrl.length < effectiveMinLength) {
         continue;
       }
 

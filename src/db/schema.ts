@@ -1,4 +1,11 @@
-import { pgTable, serial, text, timestamp, boolean } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  serial,
+  text,
+  timestamp,
+  boolean,
+  integer,
+} from "drizzle-orm/pg-core";
 
 export const watchChannels = pgTable("watch_channels", {
   id: serial("id").primaryKey(),
@@ -13,6 +20,7 @@ export const watchChannels = pgTable("watch_channels", {
 export const guildConfigs = pgTable("guild_configs", {
   guildId: text("guild_id").primaryKey(),
   autoShortenEnabled: boolean("auto_shorten_enabled").default(true).notNull(),
+  autoShortenMinUrlLength: integer("auto_shorten_min_url_length"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -25,6 +33,7 @@ export const userConfigs = pgTable("user_configs", {
   userId: text("user_id").primaryKey(),
   autoDmMode: text("auto_dm_mode").default("inherit").notNull(),
   dmFormat: text("dm_format").default("replace").notNull(),
+  autoShortenMinUrlLength: integer("auto_shorten_min_url_length"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),

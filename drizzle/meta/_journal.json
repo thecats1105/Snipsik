@@ -15,6 +15,13 @@
       "when": 1788668541000,
       "tag": "0001_add_user_configs",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788698740025,
+      "tag": "0002_real_darwin",
+      "breakpoints": true
     }
   ]
 }

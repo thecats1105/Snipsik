@@ -25,9 +25,20 @@ const envSchema = z.object({
       val
         .split(",")
         .map((id) => id.trim())
-        .filter((id) => id.length > 0)
+        .filter((id) => id.length > 0),
     ),
-  NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
+  AUTO_SHORTEN_MIN_URL_LENGTH: z
+    .string()
+    .optional()
+    .default("70")
+    .transform((val) => {
+      const parsed = parseInt(val, 10);
+      if (isNaN(parsed) || parsed < 0) return 70;
+      return Math.min(parsed, 2048);
+    }),
+  NODE_ENV: z
+    .enum(["development", "production", "test"])
+    .default("development"),
 });
 
 export type Config = z.infer<typeof envSchema>;
@@ -41,7 +52,9 @@ try {
     const errorDetails = error.errors
       .map((err) => `  - ${err.path.join(".")}: ${err.message}`)
       .join("\n");
-    console.error(`\x1b[31m❌ Environment Configuration Error:\x1b[0m\n${errorDetails}`);
+    console.error(
+      `\x1b[31m❌ Environment Configuration Error:\x1b[0m\n${errorDetails}`,
+    );
     process.exit(1);
   }
   throw error;
