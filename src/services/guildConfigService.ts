@@ -1,7 +1,10 @@
 import { db } from "@/db";
 import { guildConfigs } from "@/db/schema";
 import { config } from "@/config";
-import { userConfigService } from "@/services/userConfigService";
+import {
+  userConfigService,
+  normalizeMinUrlLength,
+} from "@/services/userConfigService";
 import { logger } from "@/utils/logger";
 
 export interface GuildConfigData {
@@ -104,8 +107,19 @@ class GuildConfigService {
     }
 
     if (updates.autoShortenMinUrlLength !== undefined) {
-      setClause.autoShortenMinUrlLength = updates.autoShortenMinUrlLength;
-      insertValues.autoShortenMinUrlLength = updates.autoShortenMinUrlLength;
+      const normalizedLen = normalizeMinUrlLength(
+        updates.autoShortenMinUrlLength,
+      );
+      if (!normalizedLen.valid) {
+        return {
+          success: false,
+          error:
+            "Invalid autoShortenMinUrlLength. Must be -1 (inherit), 0 (all), or an integer between 1 and 2048.",
+          config: current,
+        };
+      }
+      setClause.autoShortenMinUrlLength = normalizedLen.value;
+      insertValues.autoShortenMinUrlLength = normalizedLen.value;
     }
 
     try {

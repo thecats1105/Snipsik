@@ -18,6 +18,16 @@ export const DEFAULT_USER_CONFIG: Readonly<UserConfigData> = {
   autoShortenMinUrlLength: null,
 };
 
+/**
+ * Normalizes input value for minimum URL length threshold.
+ * - null, undefined, -1, "inherit", "default", "reset": returns { valid: true, value: null } (inherit)
+ * - 0, "0", "all": returns { valid: true, value: 0 } (all URLs)
+ * - 1..2048 (or numeric string): returns { valid: true, value: N }
+ * - anything else: returns { valid: false, value: null }
+ *
+ * @param value - The raw input value to normalize.
+ * @returns An object indicating validity and the normalized number or null.
+ */
 export function normalizeMinUrlLength(value: unknown): {
   valid: boolean;
   value: number | null;
@@ -58,6 +68,12 @@ export function normalizeMinUrlLength(value: unknown): {
   return { valid: false, value: null };
 }
 
+/**
+ * Normalizes an unknown value to a valid AutoDmMode or null.
+ *
+ * @param value - Input string or unknown value to normalize.
+ * @returns Normalized AutoDmMode or null if invalid.
+ */
 export function normalizeAutoDmMode(value: unknown): AutoDmMode | null {
   if (typeof value !== "string") return null;
   const lower = value.trim().toLowerCase();
@@ -79,6 +95,12 @@ export function normalizeAutoDmMode(value: unknown): AutoDmMode | null {
   return null;
 }
 
+/**
+ * Normalizes an unknown value to a valid DmFormat or null.
+ *
+ * @param value - Input string or unknown value to normalize.
+ * @returns Normalized DmFormat or null if invalid.
+ */
 export function normalizeDmFormat(value: unknown): DmFormat | null {
   if (typeof value !== "string") return null;
   const lower = value.trim().toLowerCase();
@@ -192,8 +214,19 @@ class UserConfigService {
     }
 
     if (updates.autoShortenMinUrlLength !== undefined) {
-      setClause.autoShortenMinUrlLength = updates.autoShortenMinUrlLength;
-      insertValues.autoShortenMinUrlLength = updates.autoShortenMinUrlLength;
+      const normalizedLen = normalizeMinUrlLength(
+        updates.autoShortenMinUrlLength,
+      );
+      if (!normalizedLen.valid) {
+        return {
+          success: false,
+          error:
+            "Invalid autoShortenMinUrlLength. Must be -1 (inherit), 0 (all), or an integer between 1 and 2048.",
+          config: current,
+        };
+      }
+      setClause.autoShortenMinUrlLength = normalizedLen.value;
+      insertValues.autoShortenMinUrlLength = normalizedLen.value;
     }
 
     try {

@@ -287,4 +287,17 @@ describe("UserConfigService Unit Tests", () => {
       }
     });
   });
+
+  describe("setUserConfig Validation", () => {
+    it("rejects invalid autoShortenMinUrlLength values outside 0..2048", async () => {
+      const res = await userConfigService.setUserConfig(
+        "test-user-validation",
+        {
+          autoShortenMinUrlLength: 3000,
+        },
+      );
+      expect(res.success).toBe(false);
+      expect(res.error).toContain("Invalid autoShortenMinUrlLength");
+    });
+  });
 });

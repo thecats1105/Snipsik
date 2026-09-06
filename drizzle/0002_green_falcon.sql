@@ -1,0 +1,4 @@
+ALTER TABLE "guild_configs" ADD COLUMN "auto_shorten_min_url_length" integer;--> statement-breakpoint
+ALTER TABLE "user_configs" ADD COLUMN "auto_shorten_min_url_length" integer;--> statement-breakpoint
+ALTER TABLE "guild_configs" ADD CONSTRAINT "guild_configs_min_url_len_check" CHECK ("guild_configs"."auto_shorten_min_url_length" >= 0 AND "guild_configs"."auto_shorten_min_url_length" <= 2048);--> statement-breakpoint
+ALTER TABLE "user_configs" ADD CONSTRAINT "user_configs_min_url_len_check" CHECK ("user_configs"."auto_shorten_min_url_length" >= 0 AND "user_configs"."auto_shorten_min_url_length" <= 2048);

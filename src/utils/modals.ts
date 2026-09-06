@@ -125,6 +125,12 @@ export function createEditLinkModal(link: SinkLink): ModalBuilder {
   return modal;
 }
 
+/**
+ * Creates a modal for setting user minimum URL length threshold.
+ *
+ * @param currentVal - Current user threshold (number or null if inherited).
+ * @returns Configured ModalBuilder instance.
+ */
 export function createMinLengthConfigModal(
   currentVal: number | null,
 ): ModalBuilder {

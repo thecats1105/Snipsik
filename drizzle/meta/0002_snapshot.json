@@ -1,5 +1,5 @@
 {
-  "id": "83a29a52-3440-46b4-9095-d0e8134e3b50",
+  "id": "7857aa21-ed95-4d34-be5a-a6c78a55bb93",
   "prevId": "7c29a051-629b-4ba9-bb7a-1298f53efe0e",
   "version": "7",
   "dialect": "postgresql",
@@ -47,7 +47,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "guild_configs_min_url_len_check": {
+          "name": "guild_configs_min_url_len_check",
+          "value": "\"guild_configs\".\"auto_shorten_min_url_length\" >= 0 AND \"guild_configs\".\"auto_shorten_min_url_length\" <= 2048"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.user_configs": {
@@ -100,7 +105,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "user_configs_min_url_len_check": {
+          "name": "user_configs_min_url_len_check",
+          "value": "\"user_configs\".\"auto_shorten_min_url_length\" >= 0 AND \"user_configs\".\"auto_shorten_min_url_length\" <= 2048"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.watch_channels": {

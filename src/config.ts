@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const envSchema = z.object({
+export const envSchema = z.object({
   DISCORD_TOKEN: z.string().min(1, "DISCORD_TOKEN is required"),
   DISCORD_CLIENT_ID: z.string().min(1, "DISCORD_CLIENT_ID is required"),
   DATABASE_URL: z.string().url("DATABASE_URL must be a valid connection URL"),
@@ -32,7 +32,9 @@ const envSchema = z.object({
     .optional()
     .default("70")
     .transform((val) => {
-      const parsed = parseInt(val, 10);
+      const trimmed = val.trim();
+      if (!/^\d+$/.test(trimmed)) return 70;
+      const parsed = parseInt(trimmed, 10);
       if (isNaN(parsed) || parsed < 0) return 70;
       return Math.min(parsed, 2048);
     }),

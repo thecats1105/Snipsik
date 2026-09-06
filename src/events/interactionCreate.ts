@@ -289,6 +289,7 @@ export async function onInteractionCreate(
 
       // Config Toggle: Min URL Length (Inherit -1)
       if (customId === CustomId.CONFIG_LEN_INHERIT) {
+        await interaction.deferUpdate();
         const res = await userConfigService.setUserConfig(interaction.user.id, {
           autoShortenMinUrlLength: null,
         });
@@ -317,12 +318,13 @@ export async function onInteractionCreate(
           notice,
           effectiveMinLength,
         );
-        await interaction.update(view);
+        await interaction.editReply(view);
         return;
       }
 
       // Config Toggle: Min URL Length (All 0)
       if (customId === CustomId.CONFIG_LEN_ALL) {
+        await interaction.deferUpdate();
         const res = await userConfigService.setUserConfig(interaction.user.id, {
           autoShortenMinUrlLength: 0,
         });
@@ -352,7 +354,7 @@ export async function onInteractionCreate(
           notice,
           effectiveMinLength,
         );
-        await interaction.update(view);
+        await interaction.editReply(view);
         return;
       }
 

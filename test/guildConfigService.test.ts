@@ -46,13 +46,12 @@ describe("GuildConfigService Unit Tests", () => {
   });
 
   describe("resolveEffectiveMinUrlLength (3-Tier Hierarchy)", () => {
-    it("falls back to global ENV default (70) when neither user nor guild has override", () => {
+    it("falls back to global ENV default when neither user nor guild has override", () => {
       const effective = guildConfigService.resolveEffectiveMinUrlLength(
         testGuildId,
         testUserId,
       );
       expect(effective).toBe(config.AUTO_SHORTEN_MIN_URL_LENGTH);
-      expect(effective).toBe(70);
     });
 
     it("applies guild override when user has no override", () => {
@@ -159,12 +158,22 @@ describe("GuildConfigService Unit Tests", () => {
         guildConfigService.resolveEffectiveMinUrlLength(null, testUserId),
       ).toBe(80);
 
-      // Without user override -> ENV (70)
+      // Without user override -> ENV
       // @ts-expect-error accessing private cache for test setup
       userConfigService.cache.clear();
       expect(
         guildConfigService.resolveEffectiveMinUrlLength(undefined, testUserId),
-      ).toBe(70);
+      ).toBe(config.AUTO_SHORTEN_MIN_URL_LENGTH);
+    });
+  });
+
+  describe("setGuildConfig validation", () => {
+    it("rejects invalid autoShortenMinUrlLength values outside 0..2048", async () => {
+      const result = await guildConfigService.setGuildConfig(testGuildId, {
+        autoShortenMinUrlLength: 3000,
+      });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Invalid autoShortenMinUrlLength");
     });
   });
 });
