@@ -66,6 +66,13 @@ describe("MessageCreate Pipe URL Extraction and Replacement", () => {
       );
     });
 
+    it("preserves legitimate trailing double pipe on URLs outside spoiler", () => {
+      const trailingDoublePipeUrl = "https://example.com/query?filter=||";
+      expect(cleanExtractedUrl(trailingDoublePipeUrl, false)).toBe(
+        "https://example.com/query?filter=||",
+      );
+    });
+
     it("preserves legitimate trailing single pipe on URLs inside spoiler", () => {
       // Inside spoiler with trailing pipe: candidate captured is URL + "||" -> "...?filter=|||"
       const trailingPipeInsideSpoiler = "https://example.com/query?filter=|||";

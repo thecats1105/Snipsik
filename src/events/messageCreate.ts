@@ -27,11 +27,8 @@ export function cleanExtractedUrl(
 ): string {
   let url = rawUrl;
 
-  // 1. Strip trailing Discord spoiler delimiter (||) only if verified by enclosing context or ending in ||
+  // 1. Strip trailing Discord spoiler delimiter (||) only when verified by enclosing spoiler context
   if (isEnclosedInSpoiler && url.endsWith("||")) {
-    url = url.slice(0, -2);
-  } else if (url.endsWith("||")) {
-    // If double-pipe attaches to end of URL without preceding tag, strip the spoiler delimiter
     url = url.slice(0, -2);
   }
 
