@@ -404,16 +404,22 @@ describe("Auto-Shortening Existing URL Reuse", () => {
     });
     sinkClient.createLink = createLinkMock;
 
+    const sentPayloads1: any[] = [];
+    const sentPayloads2: any[] = [];
+
     const mockMessage1 = {
       author: {
         id: testUserId,
         bot: false,
         tag: "Tester#0001",
         createDM: async () => ({
-          send: mock(async () => ({
-            flags: { has: () => true },
-            suppressEmbeds: mock(async () => {}),
-          })),
+          send: mock(async (payload: any) => {
+            sentPayloads1.push(payload);
+            return {
+              flags: { has: () => true },
+              suppressEmbeds: mock(async () => {}),
+            };
+          }),
         }),
       },
       guildId: "guild-1",
@@ -430,10 +436,13 @@ describe("Auto-Shortening Existing URL Reuse", () => {
         bot: false,
         tag: "Tester#0001",
         createDM: async () => ({
-          send: mock(async () => ({
-            flags: { has: () => true },
-            suppressEmbeds: mock(async () => {}),
-          })),
+          send: mock(async (payload: any) => {
+            sentPayloads2.push(payload);
+            return {
+              flags: { has: () => true },
+              suppressEmbeds: mock(async () => {}),
+            };
+          }),
         }),
       },
       guildId: "guild-1",
@@ -452,5 +461,21 @@ describe("Auto-Shortening Existing URL Reuse", () => {
 
     // createLink must be called only once thanks to in-flight deduplication
     expect(createLinkMock).toHaveBeenCalledTimes(1);
+
+    // Verify both handlers delivered the exact same resolved slug in DM card and text chunk
+    expect(sentPayloads1.length).toBe(2);
+    expect(sentPayloads2.length).toBe(2);
+
+    expect(sentPayloads1[1].content).toBe(
+      `Race 1: https://s.japsik.com/${newSlug}`,
+    );
+    expect(sentPayloads2[1].content).toBe(
+      `Race 2: https://s.japsik.com/${newSlug}`,
+    );
+
+    const cardJson1 = JSON.stringify(sentPayloads1[0].components[0].toJSON());
+    const cardJson2 = JSON.stringify(sentPayloads2[0].components[0].toJSON());
+    expect(cardJson1).toContain(`https://s.japsik.com/${newSlug}`);
+    expect(cardJson2).toContain(`https://s.japsik.com/${newSlug}`);
   });
 });
