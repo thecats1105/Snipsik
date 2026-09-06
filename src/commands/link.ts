@@ -20,11 +20,20 @@ import {
   userConfigService,
   normalizeAutoDmMode,
   normalizeDmFormat,
+  normalizeMinUrlLength,
 } from "@/services/userConfigService";
+import { guildConfigService } from "@/services/guildConfigService";
+import { config } from "@/config";
 import { ui } from "@/utils/ui";
 import { parseExpiration } from "@/utils/time";
 import { logger } from "@/utils/logger";
 
+/**
+ * Fetches link statistics and dashboard summary for a specific Discord user.
+ *
+ * @param userId - Discord user snowflake ID
+ * @returns Aggregated UserDashboardStats object containing link counts and click totals
+ */
 export async function fetchUserDashboardStats(
   userId: string,
 ): Promise<UserDashboardStats> {
@@ -148,7 +157,7 @@ export const linkCommand: Command = {
         .addStringOption((opt) =>
           opt
             .setName("key")
-            .setDescription("설정 항목 (auto_dm, dm_format)")
+            .setDescription("설정 항목 (auto_dm, dm_format, min_length)")
             .setAutocomplete(true)
             .setRequired(false),
         )
@@ -426,6 +435,23 @@ export const linkCommand: Command = {
           sub
             .setName("list")
             .setDescription("현재 서버의 감시 대상 채널 목록을 조회합니다."),
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName("min-length")
+            .setDescription(
+              "이 서버에서 자동 단축할 최소 URL 길이를 설정합니다 (-1: 초기화, 0: 전체, 1~2048: 지정 길이).",
+            )
+            .addIntegerOption((opt) =>
+              opt
+                .setName("length")
+                .setDescription(
+                  "최소 URL 길이 (-1: ENV 기본값 상속, 0: 전체, 1~2048: 길이)",
+                )
+                .setMinValue(-1)
+                .setMaxValue(2048)
+                .setRequired(false),
+            ),
         ),
     ),
 
@@ -772,7 +798,10 @@ export const linkCommand: Command = {
 };
 
 /**
- * Handles /link watch [add|remove|list] subcommands
+ * Handles /link watch [add|remove|list|min-length] subcommands.
+ *
+ * @param interaction - Chat input command interaction
+ * @param subcommand - Name of the subcommand executed
  */
 async function handleWatchCommand(
   interaction: ChatInputCommandInteraction,
@@ -878,6 +907,63 @@ async function handleWatchCommand(
       channelListStr,
     );
     await interaction.editReply(listEmbed);
+    return;
+  }
+
+  if (subcommand === "min-length") {
+    const lengthOpt = interaction.options.getInteger("length");
+
+    // 1. If length is omitted: show current status
+    if (lengthOpt === null) {
+      const guildCfg = guildConfigService.getGuildConfig(interaction.guildId);
+
+      const statusDesc =
+        guildCfg.autoShortenMinUrlLength === null
+          ? `🔄 **전역 기본값 상속 (\`${config.AUTO_SHORTEN_MIN_URL_LENGTH}자\`)** — 서버 개별 설정이 없어 ENV 전역 기본값을 따릅니다.`
+          : guildCfg.autoShortenMinUrlLength === 0
+            ? `⚡ **전체 단축 (제한 없음)** — 이 서버의 감시 채널에서는 모든 유효 URL이 단축됩니다.`
+            : `🎯 **최소 \`${guildCfg.autoShortenMinUrlLength}자\` 이상** — ${guildCfg.autoShortenMinUrlLength}자 이상의 URL만 단축됩니다.`;
+
+      const infoEmbed = ui.createInfoMessage(
+        "서버 URL 최소 길이 설정 조회",
+        `**서버 설정:** ${statusDesc}\n` +
+          `**전역 ENV 기본값:** \`${config.AUTO_SHORTEN_MIN_URL_LENGTH}자\`\n\n` +
+          `💡 **설정 변경 방법:**\n` +
+          `• \`/link watch min-length length:50\` → 50자 이상만 단축\n` +
+          `• \`/link watch min-length length:0\` → 모든 URL 단축 (제한 해제)\n` +
+          `• \`/link watch min-length length:-1\` → 초기화 (전역 기본값 상속)`,
+      );
+      await interaction.editReply(infoEmbed);
+      return;
+    }
+
+    // 2. If length is provided: update guild config
+    const targetVal = lengthOpt === -1 ? null : lengthOpt;
+    const res = await guildConfigService.setGuildConfig(interaction.guildId, {
+      autoShortenMinUrlLength: targetVal,
+    });
+
+    if (!res.success) {
+      const errEmbed = ui.createErrorMessage(
+        "서버 설정 변경 실패",
+        res.error || "오류가 발생했습니다.",
+      );
+      await interaction.editReply(errEmbed);
+      return;
+    }
+
+    const resultDesc =
+      targetVal === null
+        ? `서버 설정이 초기화되어 **전역 기본값(\`${config.AUTO_SHORTEN_MIN_URL_LENGTH}자\`)**을 상속받습니다.`
+        : targetVal === 0
+          ? "이 서버의 감시 채널에서 **길이 제한 없이 모든 URL**을 단축하도록 설정되었습니다."
+          : `이 서버의 감시 채널에서 **최소 \`${targetVal}자\` 이상인 URL**만 단축하도록 설정되었습니다.`;
+
+    const successEmbed = ui.createSuccessMessage(
+      "서버 URL 최소 길이 설정 완료",
+      resultDesc,
+    );
+    await interaction.editReply(successEmbed);
     return;
   }
 }
@@ -1165,7 +1251,9 @@ async function handleAdminCommand(
 }
 
 /**
- * Handles /link config [key] [value] subcommand
+ * Handles /link config [key] [value] subcommand.
+ *
+ * @param interaction - Chat input command interaction
  */
 async function handleConfigCommand(
   interaction: ChatInputCommandInteraction,
@@ -1178,10 +1266,19 @@ async function handleConfigCommand(
   const value = interaction.options.getString("value")?.trim();
 
   const currentConfig = userConfigService.getUserConfig(interaction.user.id);
+  const effectiveMinLength = guildConfigService.resolveEffectiveMinUrlLength(
+    interaction.guildId,
+    interaction.user.id,
+  );
 
   // 1. No key passed -> show interactive Config Panel
   if (!key) {
-    const view = ui.createConfigPanelView(interaction.user, currentConfig);
+    const view = ui.createConfigPanelView(
+      interaction.user,
+      currentConfig,
+      undefined,
+      effectiveMinLength,
+    );
     await interaction.editReply(view);
     return;
   }
@@ -1203,15 +1300,34 @@ async function handleConfigCommand(
           ? "본문 치환 (기본값)"
           : "URL 목록 나열";
       noticeDesc = `현재 \`dm_format\` 설정값은 **${currentConfig.dmFormat}** (${fmtLabel}) 입니다.`;
+    } else if (key === "min_length" || key === "min-length") {
+      const lenLabel =
+        currentConfig.autoShortenMinUrlLength === null
+          ? `상속 (현재: ${effectiveMinLength}자)`
+          : currentConfig.autoShortenMinUrlLength === 0
+            ? "전체 단축 (제한 없음)"
+            : `${currentConfig.autoShortenMinUrlLength}자 이상`;
+      noticeDesc = `현재 \`min_length\` 설정값은 **${currentConfig.autoShortenMinUrlLength ?? "상속 (-1)"}** (${lenLabel}) 입니다.`;
     } else {
-      noticeDesc = `알 수 없는 설정 키입니다: \`${key}\` (지원 키: \`auto_dm\`, \`dm_format\`)`;
+      noticeDesc = `알 수 없는 설정 키입니다: \`${key}\` (지원 키: \`auto_dm\`, \`dm_format\`, \`min_length\`)`;
     }
 
-    const view = ui.createConfigPanelView(interaction.user, currentConfig, {
-      title: "현재 설정 조회",
-      description: noticeDesc,
-      type: key === "auto_dm" || key === "dm_format" ? "info" : "error",
-    });
+    const view = ui.createConfigPanelView(
+      interaction.user,
+      currentConfig,
+      {
+        title: "현재 설정 조회",
+        description: noticeDesc,
+        type:
+          key === "auto_dm" ||
+          key === "dm_format" ||
+          key === "min_length" ||
+          key === "min-length"
+            ? "info"
+            : "error",
+      },
+      effectiveMinLength,
+    );
     await interaction.editReply(view);
     return;
   }
@@ -1220,11 +1336,16 @@ async function handleConfigCommand(
   if (key === "auto_dm") {
     const normalized = normalizeAutoDmMode(value);
     if (!normalized) {
-      const view = ui.createConfigPanelView(interaction.user, currentConfig, {
-        title: "잘못된 설정 값",
-        description: `\`auto_dm\` 설정 값은 \`inherit\`, \`on\`(또는 \`true\`), \`off\`(또는 \`false\`) 중 하나여야 합니다.\n입력값: \`${value}\``,
-        type: "error",
-      });
+      const view = ui.createConfigPanelView(
+        interaction.user,
+        currentConfig,
+        {
+          title: "잘못된 설정 값",
+          description: `\`auto_dm\` 설정 값은 \`inherit\`, \`on\`(또는 \`true\`), \`off\`(또는 \`false\`) 중 하나여야 합니다.\n입력값: \`${value}\``,
+          type: "error",
+        },
+        effectiveMinLength,
+      );
       await interaction.editReply(view);
       return;
     }
@@ -1233,20 +1354,30 @@ async function handleConfigCommand(
       autoDmMode: normalized,
     });
     if (!res.success) {
-      const view = ui.createConfigPanelView(interaction.user, res.config, {
-        title: "설정 변경 실패",
-        description: res.error || "데이터베이스 저장 중 오류가 발생했습니다.",
-        type: "error",
-      });
+      const view = ui.createConfigPanelView(
+        interaction.user,
+        res.config,
+        {
+          title: "설정 변경 실패",
+          description: res.error || "데이터베이스 저장 중 오류가 발생했습니다.",
+          type: "error",
+        },
+        effectiveMinLength,
+      );
       await interaction.editReply(view);
       return;
     }
 
-    const view = ui.createConfigPanelView(interaction.user, res.config, {
-      title: "설정 변경 완료",
-      description: `자동 DM 모드가 **${normalized}** (으)로 성공적으로 변경되었습니다.`,
-      type: "success",
-    });
+    const view = ui.createConfigPanelView(
+      interaction.user,
+      res.config,
+      {
+        title: "설정 변경 완료",
+        description: `자동 DM 모드가 **${normalized}** (으)로 성공적으로 변경되었습니다.`,
+        type: "success",
+      },
+      effectiveMinLength,
+    );
     await interaction.editReply(view);
     return;
   }
@@ -1254,11 +1385,16 @@ async function handleConfigCommand(
   if (key === "dm_format") {
     const normalized = normalizeDmFormat(value);
     if (!normalized) {
-      const view = ui.createConfigPanelView(interaction.user, currentConfig, {
-        title: "잘못된 설정 값",
-        description: `\`dm_format\` 설정 값은 \`replace\`(본문 치환) 또는 \`list\`(단축 URL 목록) 이어야 합니다.\n입력값: \`${value}\``,
-        type: "error",
-      });
+      const view = ui.createConfigPanelView(
+        interaction.user,
+        currentConfig,
+        {
+          title: "잘못된 설정 값",
+          description: `\`dm_format\` 설정 값은 \`replace\`(본문 치환) 또는 \`list\`(단축 URL 목록) 이어야 합니다.\n입력값: \`${value}\``,
+          type: "error",
+        },
+        effectiveMinLength,
+      );
       await interaction.editReply(view);
       return;
     }
@@ -1267,35 +1403,113 @@ async function handleConfigCommand(
       dmFormat: normalized,
     });
     if (!res.success) {
-      const view = ui.createConfigPanelView(interaction.user, res.config, {
-        title: "설정 변경 실패",
-        description: res.error || "데이터베이스 저장 중 오류가 발생했습니다.",
-        type: "error",
-      });
+      const view = ui.createConfigPanelView(
+        interaction.user,
+        res.config,
+        {
+          title: "설정 변경 실패",
+          description: res.error || "데이터베이스 저장 중 오류가 발생했습니다.",
+          type: "error",
+        },
+        effectiveMinLength,
+      );
       await interaction.editReply(view);
       return;
     }
 
-    const view = ui.createConfigPanelView(interaction.user, res.config, {
-      title: "설정 변경 완료",
-      description: `DM 메시지 포맷이 **${normalized}** (으)로 성공적으로 변경되었습니다.`,
-      type: "success",
+    const view = ui.createConfigPanelView(
+      interaction.user,
+      res.config,
+      {
+        title: "설정 변경 완료",
+        description: `DM 메시지 포맷이 **${normalized}** (으)로 성공적으로 변경되었습니다.`,
+        type: "success",
+      },
+      effectiveMinLength,
+    );
+    await interaction.editReply(view);
+    return;
+  }
+
+  if (key === "min_length" || key === "min-length") {
+    const normalized = normalizeMinUrlLength(value);
+    if (!normalized.valid) {
+      const view = ui.createConfigPanelView(
+        interaction.user,
+        currentConfig,
+        {
+          title: "잘못된 설정 값",
+          description: `\`min_length\` 설정 값은 \`-1\`(상속/초기화), \`0\`(전체 단축), 또는 \`1\`~ \`2048\`(지정 길이) 여야 합니다.\n입력값: \`${value}\``,
+          type: "error",
+        },
+        effectiveMinLength,
+      );
+      await interaction.editReply(view);
+      return;
+    }
+
+    const res = await userConfigService.setUserConfig(interaction.user.id, {
+      autoShortenMinUrlLength: normalized.value,
     });
+    const updatedEffective = guildConfigService.resolveEffectiveMinUrlLength(
+      interaction.guildId,
+      interaction.user.id,
+    );
+
+    if (!res.success) {
+      const view = ui.createConfigPanelView(
+        interaction.user,
+        res.config,
+        {
+          title: "설정 변경 실패",
+          description: res.error || "데이터베이스 저장 중 오류가 발생했습니다.",
+          type: "error",
+        },
+        updatedEffective,
+      );
+      await interaction.editReply(view);
+      return;
+    }
+
+    const targetDesc =
+      normalized.value === null
+        ? `상위 기본값 상속 (현재: **${updatedEffective}자**)`
+        : normalized.value === 0
+          ? "전체 단축 (제한 없음)"
+          : `최소 **${normalized.value}자** 이상 단축`;
+
+    const view = ui.createConfigPanelView(
+      interaction.user,
+      res.config,
+      {
+        title: "설정 변경 완료",
+        description: `최소 URL 길이가 **${targetDesc}** (으)로 성공적으로 변경되었습니다.`,
+        type: "success",
+      },
+      updatedEffective,
+    );
     await interaction.editReply(view);
     return;
   }
 
   // Unknown key
-  const view = ui.createConfigPanelView(interaction.user, currentConfig, {
-    title: "알 수 없는 설정 키",
-    description: `지원하지 않는 설정 키입니다: \`${key}\` (지원 키: \`auto_dm\`, \`dm_format\`)`,
-    type: "error",
-  });
+  const view = ui.createConfigPanelView(
+    interaction.user,
+    currentConfig,
+    {
+      title: "알 수 없는 설정 키",
+      description: `지원하지 않는 설정 키입니다: \`${key}\` (지원 키: \`auto_dm\`, \`dm_format\`, \`min_length\`)`,
+      type: "error",
+    },
+    effectiveMinLength,
+  );
   await interaction.editReply(view);
 }
 
 /**
- * Handles Autocomplete for /link config command
+ * Handles Autocomplete for /link config command.
+ *
+ * @param interaction - Autocomplete interaction
  */
 export async function handleConfigAutocomplete(
   interaction: AutocompleteInteraction,
@@ -1311,6 +1525,10 @@ export async function handleConfigAutocomplete(
       {
         name: "dm_format (DM 메시지 포맷: replace / list)",
         value: "dm_format",
+      },
+      {
+        name: "min_length (최소 URL 길이: -1 상속 / 0 전체 / 1~2048 길이)",
+        value: "min_length",
       },
     ];
     const filtered = keyChoices.filter(
@@ -1343,6 +1561,14 @@ export async function handleConfigAutocomplete(
         { name: "replace - 메시지 본문 치환 (기본값)", value: "replace" },
         { name: "list - 단축 URL 목록 나열 (모바일 최적화)", value: "list" },
       ];
+    } else if (selectedKey === "min_length" || selectedKey === "min-length") {
+      valueChoices = [
+        { name: "-1 - 상위 기본값 상속 (초기화)", value: "-1" },
+        { name: "0 - 모든 URL 단축 (제한 없음)", value: "0" },
+        { name: "70 - 70자 이상 단축 (기본 권장값)", value: "70" },
+        { name: "50 - 50자 이상 단축", value: "50" },
+        { name: "100 - 100자 이상 단축", value: "100" },
+      ];
     } else {
       valueChoices = [
         { name: "auto_dm: inherit (서버 설정 따름)", value: "inherit" },
@@ -1350,6 +1576,9 @@ export async function handleConfigAutocomplete(
         { name: "auto_dm: off (항상 끔)", value: "off" },
         { name: "dm_format: replace (본문 치환)", value: "replace" },
         { name: "dm_format: list (URL 목록)", value: "list" },
+        { name: "min_length: -1 (상위 기본값 상속)", value: "-1" },
+        { name: "min_length: 0 (모든 URL 단축)", value: "0" },
+        { name: "min_length: 70 (70자 이상)", value: "70" },
       ];
     }
 

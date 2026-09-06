@@ -9,13 +9,71 @@ export interface UserConfigData {
   userId?: string;
   autoDmMode: AutoDmMode;
   dmFormat: DmFormat;
+  autoShortenMinUrlLength: number | null;
 }
 
 export const DEFAULT_USER_CONFIG: Readonly<UserConfigData> = {
   autoDmMode: "inherit",
   dmFormat: "replace",
+  autoShortenMinUrlLength: null,
 };
 
+/**
+ * Normalizes input value for minimum URL length threshold.
+ * - null, undefined, -1, "inherit", "default", "reset": returns { valid: true, value: null } (inherit)
+ * - 0, "0", "all": returns { valid: true, value: 0 } (all URLs)
+ * - 1..2048 (or numeric string): returns { valid: true, value: N }
+ * - anything else: returns { valid: false, value: null }
+ *
+ * @param value - The raw input value to normalize.
+ * @returns An object indicating validity and the normalized number or null.
+ */
+export function normalizeMinUrlLength(value: unknown): {
+  valid: boolean;
+  value: number | null;
+} {
+  if (value === null || value === undefined) {
+    return { valid: true, value: null };
+  }
+
+  if (typeof value === "number") {
+    if (!Number.isInteger(value)) return { valid: false, value: null };
+    if (value === -1) return { valid: true, value: null };
+    if (value === 0) return { valid: true, value: 0 };
+    if (value >= 1 && value <= 2048) return { valid: true, value };
+    return { valid: false, value: null };
+  }
+
+  if (typeof value === "string") {
+    const lower = value.trim().toLowerCase();
+    if (
+      lower === "inherit" ||
+      lower === "default" ||
+      lower === "reset" ||
+      lower === "-1"
+    ) {
+      return { valid: true, value: null };
+    }
+    if (lower === "all" || lower === "0") {
+      return { valid: true, value: 0 };
+    }
+    const parsed = parseInt(lower, 10);
+    if (String(parsed) === lower) {
+      if (parsed === -1) return { valid: true, value: null };
+      if (parsed === 0) return { valid: true, value: 0 };
+      if (parsed >= 1 && parsed <= 2048) return { valid: true, value: parsed };
+    }
+  }
+
+  return { valid: false, value: null };
+}
+
+/**
+ * Normalizes an unknown value to a valid AutoDmMode or null.
+ *
+ * @param value - Input string or unknown value to normalize.
+ * @returns Normalized AutoDmMode or null if invalid.
+ */
 export function normalizeAutoDmMode(value: unknown): AutoDmMode | null {
   if (typeof value !== "string") return null;
   const lower = value.trim().toLowerCase();
@@ -37,6 +95,12 @@ export function normalizeAutoDmMode(value: unknown): AutoDmMode | null {
   return null;
 }
 
+/**
+ * Normalizes an unknown value to a valid DmFormat or null.
+ *
+ * @param value - Input string or unknown value to normalize.
+ * @returns Normalized DmFormat or null if invalid.
+ */
 export function normalizeDmFormat(value: unknown): DmFormat | null {
   if (typeof value !== "string") return null;
   const lower = value.trim().toLowerCase();
@@ -52,6 +116,8 @@ class UserConfigService {
 
   /**
    * Sets cache loaded status (used for testing or manual state control).
+   *
+   * @param loaded - Cache loaded status flag.
    */
   setCacheLoadedForTest(loaded: boolean): void {
     this.cacheLoaded = loaded;
@@ -59,6 +125,8 @@ class UserConfigService {
 
   /**
    * Whether the cache has been successfully loaded from database.
+   *
+   * @returns True if cache is loaded, false otherwise.
    */
   isCacheLoaded(): boolean {
     return this.cacheLoaded;
@@ -78,6 +146,7 @@ class UserConfigService {
           userId: record.userId,
           autoDmMode,
           dmFormat,
+          autoShortenMinUrlLength: record.autoShortenMinUrlLength ?? null,
         });
       }
       this.cacheLoaded = true;
@@ -91,6 +160,9 @@ class UserConfigService {
 
   /**
    * Returns the current config for a user (from memory cache or default).
+   *
+   * @param userId - Discord user snowflake ID.
+   * @returns User configuration data.
    */
   getUserConfig(userId: string): UserConfigData {
     const cached = this.cache.get(userId);
@@ -106,10 +178,19 @@ class UserConfigService {
   /**
    * Updates or creates a user config in both DB and memory cache.
    * Modifies only supplied fields on conflict and syncs cache from returned merged row.
+   *
+   * @param userId - Discord user snowflake ID.
+   * @param updates - Partial configuration updates.
+   * @returns Operation success status and updated config.
    */
   async setUserConfig(
     userId: string,
-    updates: Partial<Pick<UserConfigData, "autoDmMode" | "dmFormat">>,
+    updates: Partial<
+      Pick<
+        UserConfigData,
+        "autoDmMode" | "dmFormat" | "autoShortenMinUrlLength"
+      >
+    >,
   ): Promise<{ success: boolean; error?: string; config: UserConfigData }> {
     const current = this.getUserConfig(userId);
 
@@ -120,6 +201,7 @@ class UserConfigService {
       userId: string;
       autoDmMode?: AutoDmMode;
       dmFormat?: DmFormat;
+      autoShortenMinUrlLength?: number | null;
       updatedAt: Date;
     } = {
       userId,
@@ -142,6 +224,22 @@ class UserConfigService {
       }
     }
 
+    if (updates.autoShortenMinUrlLength !== undefined) {
+      const normalizedLen = normalizeMinUrlLength(
+        updates.autoShortenMinUrlLength,
+      );
+      if (!normalizedLen.valid) {
+        return {
+          success: false,
+          error:
+            "Invalid autoShortenMinUrlLength. Must be -1 (inherit), 0 (all), or an integer between 1 and 2048.",
+          config: current,
+        };
+      }
+      setClause.autoShortenMinUrlLength = normalizedLen.value;
+      insertValues.autoShortenMinUrlLength = normalizedLen.value;
+    }
+
     try {
       const [saved] = await db
         .insert(userConfigs)
@@ -160,11 +258,12 @@ class UserConfigService {
         userId: saved.userId,
         autoDmMode: normalizeAutoDmMode(saved.autoDmMode) ?? "inherit",
         dmFormat: normalizeDmFormat(saved.dmFormat) ?? "replace",
+        autoShortenMinUrlLength: saved.autoShortenMinUrlLength ?? null,
       };
 
       this.cache.set(userId, savedConfig);
       logger.info(
-        `Updated user config for ${userId}: autoDmMode=${savedConfig.autoDmMode}, dmFormat=${savedConfig.dmFormat}`,
+        `Updated user config for ${userId}: autoDmMode=${savedConfig.autoDmMode}, dmFormat=${savedConfig.dmFormat}, autoShortenMinUrlLength=${savedConfig.autoShortenMinUrlLength}`,
       );
       return { success: true, config: savedConfig };
     } catch (error) {

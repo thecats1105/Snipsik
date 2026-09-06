@@ -25,6 +25,7 @@ describe("Auto-Shortening Existing URL Reuse", () => {
     userConfigService.getUserConfig = () => ({
       autoDmMode: "inherit",
       dmFormat: "replace",
+      autoShortenMinUrlLength: 0,
     });
     sinkClient.getFullShortUrl = (slug: string) =>
       `https://s.japsik.com/${slug}`;

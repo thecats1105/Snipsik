@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const envSchema = z.object({
+export const envSchema = z.object({
   DISCORD_TOKEN: z.string().min(1, "DISCORD_TOKEN is required"),
   DISCORD_CLIENT_ID: z.string().min(1, "DISCORD_CLIENT_ID is required"),
   DATABASE_URL: z.string().url("DATABASE_URL must be a valid connection URL"),
@@ -25,9 +25,22 @@ const envSchema = z.object({
       val
         .split(",")
         .map((id) => id.trim())
-        .filter((id) => id.length > 0)
+        .filter((id) => id.length > 0),
     ),
-  NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
+  AUTO_SHORTEN_MIN_URL_LENGTH: z
+    .string()
+    .optional()
+    .default("70")
+    .transform((val) => {
+      const trimmed = val.trim();
+      if (!/^\d+$/.test(trimmed)) return 70;
+      const parsed = parseInt(trimmed, 10);
+      if (isNaN(parsed) || parsed < 0) return 70;
+      return Math.min(parsed, 2048);
+    }),
+  NODE_ENV: z
+    .enum(["development", "production", "test"])
+    .default("development"),
 });
 
 export type Config = z.infer<typeof envSchema>;
@@ -41,7 +54,9 @@ try {
     const errorDetails = error.errors
       .map((err) => `  - ${err.path.join(".")}: ${err.message}`)
       .join("\n");
-    console.error(`\x1b[31m❌ Environment Configuration Error:\x1b[0m\n${errorDetails}`);
+    console.error(
+      `\x1b[31m❌ Environment Configuration Error:\x1b[0m\n${errorDetails}`,
+    );
     process.exit(1);
   }
   throw error;

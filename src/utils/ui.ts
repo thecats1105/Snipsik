@@ -475,6 +475,7 @@ export const ui = {
       description: string;
       type?: "success" | "info" | "error";
     },
+    effectiveMinLength?: number,
   ): V2MessageView {
     const container = new ContainerBuilder().setAccentColor(COLORS.DARK);
 
@@ -577,7 +578,53 @@ export const ui = {
     container.addActionRowComponents(formatRow);
     container.addSeparatorComponents(new SeparatorBuilder().setDivider(true));
 
-    // 5. Navigation Section
+    // 5. Min URL Length Section
+    const lenDesc =
+      userConfig.autoShortenMinUrlLength === null
+        ? `🔄 **상위 설정 따름 (기본값)** — 서버 또는 전역 기본값(${effectiveMinLength !== undefined ? `현재: **${effectiveMinLength}자**` : "기본 70자"})을 상속받습니다.`
+        : userConfig.autoShortenMinUrlLength === 0
+          ? "⚡ **전체 단축 (제한 없음)** — URL 길이에 관계없이 모든 유효 URL을 단축합니다."
+          : `🎯 **최소 ${userConfig.autoShortenMinUrlLength}자 이상 단축** — ${userConfig.autoShortenMinUrlLength}자 이상인 긴 URL만 단축합니다.`;
+
+    const lenText = new TextDisplayBuilder().setContent(
+      `📏 **최소 URL 길이 (\`min_length\`)**\n${lenDesc}`,
+    );
+    container.addTextDisplayComponents(lenText);
+
+    const lenRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(CustomId.CONFIG_LEN_INHERIT)
+        .setLabel("상속 (-1)")
+        .setEmoji("🔄")
+        .setStyle(
+          userConfig.autoShortenMinUrlLength === null
+            ? ButtonStyle.Success
+            : ButtonStyle.Secondary,
+        ),
+      new ButtonBuilder()
+        .setCustomId(CustomId.CONFIG_LEN_ALL)
+        .setLabel("전체 (0)")
+        .setEmoji("⚡")
+        .setStyle(
+          userConfig.autoShortenMinUrlLength === 0
+            ? ButtonStyle.Success
+            : ButtonStyle.Secondary,
+        ),
+      new ButtonBuilder()
+        .setCustomId(CustomId.CONFIG_LEN_CUSTOM)
+        .setLabel("직접 입력...")
+        .setEmoji("✏️")
+        .setStyle(
+          userConfig.autoShortenMinUrlLength !== null &&
+            userConfig.autoShortenMinUrlLength > 0
+            ? ButtonStyle.Success
+            : ButtonStyle.Secondary,
+        ),
+    );
+    container.addActionRowComponents(lenRow);
+    container.addSeparatorComponents(new SeparatorBuilder().setDivider(true));
+
+    // 6. Navigation Section
     const navRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId(CustomId.CONFIG_NAV_DASHBOARD)

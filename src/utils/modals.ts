@@ -124,3 +124,35 @@ export function createEditLinkModal(link: SinkLink): ModalBuilder {
 
   return modal;
 }
+
+/**
+ * Creates a modal for setting user minimum URL length threshold.
+ *
+ * @param currentVal - Current user threshold (number or null if inherited).
+ * @returns Configured ModalBuilder instance.
+ */
+export function createMinLengthConfigModal(
+  currentVal: number | null,
+): ModalBuilder {
+  const modal = new ModalBuilder()
+    .setCustomId(CustomId.MODAL_CONFIG_MIN_LENGTH)
+    .setTitle("최소 URL 길이 설정");
+
+  const lengthInput = new TextInputBuilder()
+    .setCustomId("min_length")
+    .setLabel("최소 URL 길이 (-1: 상속, 0: 전체, 1~2048: 길이)")
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder("예: 70 (-1은 기본값 상속, 0은 전체)")
+    .setRequired(true)
+    .setMaxLength(5);
+
+  if (currentVal !== null && currentVal !== undefined) {
+    lengthInput.setValue(String(currentVal));
+  }
+
+  modal.addComponents(
+    new ActionRowBuilder<TextInputBuilder>().addComponents(lengthInput),
+  );
+
+  return modal;
+}
