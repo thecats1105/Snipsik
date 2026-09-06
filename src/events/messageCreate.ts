@@ -117,7 +117,10 @@ export async function onMessageCreate(message: Message): Promise<void> {
         message.url,
         userConfig.dmFormat,
       );
-      await dmChannel.send(dmView);
+      const cardMsg = await dmChannel.send(dmView);
+      if (!cardMsg.flags.has(MessageFlags.SuppressEmbeds)) {
+        await cardMsg.suppressEmbeds(true);
+      }
       embedSent = true;
     } catch (embedErr) {
       logger.warn(
@@ -142,7 +145,7 @@ export async function onMessageCreate(message: Message): Promise<void> {
             flags: MessageFlags.SuppressEmbeds,
           });
           if (!sentMsg.flags.has(MessageFlags.SuppressEmbeds)) {
-            await sentMsg.suppressEmbeds(true).catch(() => {});
+            await sentMsg.suppressEmbeds(true);
           }
           textSentCount++;
         } catch (textErr) {
@@ -175,7 +178,7 @@ export async function onMessageCreate(message: Message): Promise<void> {
             flags: MessageFlags.SuppressEmbeds,
           });
           if (!sentMsg.flags.has(MessageFlags.SuppressEmbeds)) {
-            await sentMsg.suppressEmbeds(true).catch(() => {});
+            await sentMsg.suppressEmbeds(true);
           }
           textSentCount++;
         } catch (textErr) {

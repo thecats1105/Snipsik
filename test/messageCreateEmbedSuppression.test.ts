@@ -98,7 +98,7 @@ describe("Message Embed Suppression Workflow in DM Auto-Shortening", () => {
     expect(suppressEmbedsMock).not.toHaveBeenCalled();
   });
 
-  it("calls fallback suppressEmbeds(true) if Discord API fails to reflect flag on creation", async () => {
+  it("calls fallback suppressEmbeds(true) on both card and text if Discord API fails to reflect flag", async () => {
     userConfigService.getUserConfig = () => ({
       autoDmMode: "inherit",
       dmFormat: "replace",
@@ -107,7 +107,7 @@ describe("Message Embed Suppression Workflow in DM Auto-Shortening", () => {
     const suppressEmbedsMock = mock(async () => {});
 
     const mockDmChannel = {
-      send: mock(async (payload: any) => {
+      send: mock(async () => {
         return {
           flags: {
             // Simulate missing SuppressEmbeds flag in returned message
@@ -135,9 +135,53 @@ describe("Message Embed Suppression Workflow in DM Auto-Shortening", () => {
 
     await onMessageCreate(mockMessage as any);
 
-    // Fallback suppressEmbeds(true) should have been called for the 2nd message
-    expect(suppressEmbedsMock).toHaveBeenCalledTimes(1);
+    // Fallback suppressEmbeds(true) should be called for both the DM card (call 1) and replaced text chunk (call 2)
+    expect(suppressEmbedsMock).toHaveBeenCalledTimes(2);
     expect(suppressEmbedsMock).toHaveBeenCalledWith(true);
+  });
+
+  it("does not count message as successful delivery when fallback suppressEmbeds fails in replace mode", async () => {
+    userConfigService.getUserConfig = () => ({
+      autoDmMode: "inherit",
+      dmFormat: "replace",
+    });
+
+    let callCount = 0;
+    const mockDmChannel = {
+      send: mock(async () => {
+        callCount++;
+        return {
+          flags: {
+            has: () => false, // missing flag triggers fallback
+          },
+          suppressEmbeds: mock(async () => {
+            // Card succeeds, but text chunk rejection triggers catch block
+            if (callCount === 2) {
+              throw new Error("Discord API rate limited / forbidden");
+            }
+          }),
+        };
+      }),
+    };
+
+    const mockMessage = {
+      author: {
+        id: "1234567890",
+        bot: false,
+        tag: "User#1234",
+        createDM: async () => mockDmChannel,
+      },
+      guildId: "guild-1",
+      guild: {},
+      channelId: "channel-1",
+      channel: { name: "general" },
+      content: "Check this https://example.com/very/long/url/path",
+      url: "https://discord.com/channels/guild-1/channel-1/msg-1",
+    };
+
+    // Should complete without uncaught rejection
+    await onMessageCreate(mockMessage as any);
+    expect(mockDmChannel.send).toHaveBeenCalledTimes(2);
   });
 
   it("sends raw URL strings with MessageFlags.SuppressEmbeds in 'list' format mode", async () => {
@@ -183,5 +227,47 @@ describe("Message Embed Suppression Workflow in DM Auto-Shortening", () => {
     expect(listPayload.content).toBe("https://s.japsik.com/abc-xyz");
     expect(listPayload.content).not.toContain("<");
     expect(listPayload.flags).toBe(MessageFlags.SuppressEmbeds);
+  });
+
+  it("does not count message as successful delivery when fallback suppressEmbeds fails in list mode", async () => {
+    userConfigService.getUserConfig = () => ({
+      autoDmMode: "inherit",
+      dmFormat: "list",
+    });
+
+    let callCount = 0;
+    const mockDmChannel = {
+      send: mock(async () => {
+        callCount++;
+        return {
+          flags: {
+            has: () => false,
+          },
+          suppressEmbeds: mock(async () => {
+            if (callCount === 2) {
+              throw new Error("Discord API failure on list item suppression");
+            }
+          }),
+        };
+      }),
+    };
+
+    const mockMessage = {
+      author: {
+        id: "1234567890",
+        bot: false,
+        tag: "User#1234",
+        createDM: async () => mockDmChannel,
+      },
+      guildId: "guild-1",
+      guild: {},
+      channelId: "channel-1",
+      channel: { name: "general" },
+      content: "Here: https://example.com/very/long/url/path",
+      url: "https://discord.com/channels/guild-1/channel-1/msg-1",
+    };
+
+    await onMessageCreate(mockMessage as any);
+    expect(mockDmChannel.send).toHaveBeenCalledTimes(2);
   });
 });
