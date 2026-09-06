@@ -48,6 +48,21 @@ export function normalizeDmFormat(value: unknown): DmFormat | null {
 class UserConfigService {
   // In-memory cache for O(1) sync lookups in messageCreate
   private cache: Map<string, UserConfigData> = new Map();
+  private cacheLoaded: boolean = false;
+
+  /**
+   * Sets cache loaded status (used for testing or manual state control).
+   */
+  setCacheLoadedForTest(loaded: boolean): void {
+    this.cacheLoaded = loaded;
+  }
+
+  /**
+   * Whether the cache has been successfully loaded from database.
+   */
+  isCacheLoaded(): boolean {
+    return this.cacheLoaded;
+  }
 
   /**
    * Loads all user configs into memory on bot startup.
@@ -65,9 +80,12 @@ class UserConfigService {
           dmFormat,
         });
       }
+      this.cacheLoaded = true;
       logger.info(`Loaded ${records.length} user config(s) into memory cache.`);
     } catch (error) {
+      this.cacheLoaded = false;
       logger.error("Failed to load user configs cache from DB:", error);
+      throw error;
     }
   }
 
@@ -87,6 +105,7 @@ class UserConfigService {
 
   /**
    * Updates or creates a user config in both DB and memory cache.
+   * Modifies only supplied fields on conflict and syncs cache from returned merged row.
    */
   async setUserConfig(
     userId: string,
@@ -94,45 +113,60 @@ class UserConfigService {
   ): Promise<{ success: boolean; error?: string; config: UserConfigData }> {
     const current = this.getUserConfig(userId);
 
-    const nextAutoDmMode =
-      updates.autoDmMode !== undefined
-        ? (normalizeAutoDmMode(updates.autoDmMode) ?? current.autoDmMode)
-        : current.autoDmMode;
-
-    const nextDmFormat =
-      updates.dmFormat !== undefined
-        ? (normalizeDmFormat(updates.dmFormat) ?? current.dmFormat)
-        : current.dmFormat;
-
-    const nextConfig: UserConfigData = {
+    const setClause: Record<string, unknown> = {
+      updatedAt: new Date(),
+    };
+    const insertValues: {
+      userId: string;
+      autoDmMode?: AutoDmMode;
+      dmFormat?: DmFormat;
+      updatedAt: Date;
+    } = {
       userId,
-      autoDmMode: nextAutoDmMode,
-      dmFormat: nextDmFormat,
+      updatedAt: new Date(),
     };
 
+    if (updates.autoDmMode !== undefined) {
+      const normalized = normalizeAutoDmMode(updates.autoDmMode);
+      if (normalized) {
+        setClause.autoDmMode = normalized;
+        insertValues.autoDmMode = normalized;
+      }
+    }
+
+    if (updates.dmFormat !== undefined) {
+      const normalized = normalizeDmFormat(updates.dmFormat);
+      if (normalized) {
+        setClause.dmFormat = normalized;
+        insertValues.dmFormat = normalized;
+      }
+    }
+
     try {
-      await db
+      const [saved] = await db
         .insert(userConfigs)
-        .values({
-          userId,
-          autoDmMode: nextAutoDmMode,
-          dmFormat: nextDmFormat,
-          updatedAt: new Date(),
-        })
+        .values(insertValues)
         .onConflictDoUpdate({
           target: userConfigs.userId,
-          set: {
-            autoDmMode: nextAutoDmMode,
-            dmFormat: nextDmFormat,
-            updatedAt: new Date(),
-          },
-        });
+          set: setClause,
+        })
+        .returning();
 
-      this.cache.set(userId, nextConfig);
+      if (!saved) {
+        throw new Error("Failed to persist user configuration.");
+      }
+
+      const savedConfig: UserConfigData = {
+        userId: saved.userId,
+        autoDmMode: normalizeAutoDmMode(saved.autoDmMode) ?? "inherit",
+        dmFormat: normalizeDmFormat(saved.dmFormat) ?? "replace",
+      };
+
+      this.cache.set(userId, savedConfig);
       logger.info(
-        `Updated user config for ${userId}: autoDmMode=${nextAutoDmMode}, dmFormat=${nextDmFormat}`,
+        `Updated user config for ${userId}: autoDmMode=${savedConfig.autoDmMode}, dmFormat=${savedConfig.dmFormat}`,
       );
-      return { success: true, config: nextConfig };
+      return { success: true, config: savedConfig };
     } catch (error) {
       logger.error(`Failed to update user config for ${userId}:`, error);
       return {
@@ -145,8 +179,16 @@ class UserConfigService {
 
   /**
    * Determines whether the bot should auto-shorten URLs and send DM to the user.
+   * Fails closed (returns false) if the cache is not loaded to prevent privacy leaks.
    */
   shouldProcessUser(userId: string, isChannelWatched: boolean): boolean {
+    if (!this.cacheLoaded) {
+      logger.warn(
+        `UserConfig cache not loaded; failing closed for user ${userId}`,
+      );
+      return false;
+    }
+
     const cfg = this.getUserConfig(userId);
     if (cfg.autoDmMode === "off") return false;
     if (cfg.autoDmMode === "on") return true;

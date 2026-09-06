@@ -215,7 +215,20 @@ export async function onInteractionCreate(
           autoDmMode: targetMode,
         });
 
-        const view = ui.createConfigPanelView(interaction.user, res.config);
+        const notice = res.success
+          ? undefined
+          : {
+              title: "설정 변경 실패",
+              description:
+                res.error || "데이터베이스 저장 중 오류가 발생했습니다.",
+              type: "error" as const,
+            };
+
+        const view = ui.createConfigPanelView(
+          interaction.user,
+          res.config,
+          notice,
+        );
         await interaction.update(view);
         return;
       }
@@ -232,7 +245,20 @@ export async function onInteractionCreate(
           dmFormat: targetFormat,
         });
 
-        const view = ui.createConfigPanelView(interaction.user, res.config);
+        const notice = res.success
+          ? undefined
+          : {
+              title: "설정 변경 실패",
+              description:
+                res.error || "데이터베이스 저장 중 오류가 발생했습니다.",
+              type: "error" as const,
+            };
+
+        const view = ui.createConfigPanelView(
+          interaction.user,
+          res.config,
+          notice,
+        );
         await interaction.update(view);
         return;
       }

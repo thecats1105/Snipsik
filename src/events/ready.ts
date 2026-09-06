@@ -24,7 +24,14 @@ export async function onReady(client: Client<true>): Promise<void> {
   const dbOk = await testDbConnection();
   if (dbOk) {
     await watchService.loadCache();
-    await userConfigService.loadCache();
+    try {
+      await userConfigService.loadCache();
+    } catch (err) {
+      logger.error(
+        "Failed to load UserConfig cache on startup; failing closed for auto-DM until cache is loaded:",
+        err,
+      );
+    }
   }
 
   // Register Slash Commands

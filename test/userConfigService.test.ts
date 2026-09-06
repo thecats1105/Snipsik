@@ -39,7 +39,18 @@ describe("UserConfigService Unit Tests", () => {
   });
 
   describe("Tri-state Processing Decision (shouldProcessUser)", () => {
+    it("should fail closed (return false) when cache is not loaded", () => {
+      userConfigService.setCacheLoadedForTest(false);
+      expect(userConfigService.isCacheLoaded()).toBe(false);
+
+      const userId = "test-fail-closed-user";
+      // Regardless of channel watch status or config, always false
+      expect(userConfigService.shouldProcessUser(userId, true)).toBe(false);
+      expect(userConfigService.shouldProcessUser(userId, false)).toBe(false);
+    });
+
     it("should default to inherit when user has no custom config", () => {
+      userConfigService.setCacheLoadedForTest(true);
       const nonExistentUserId = "unconfigured-user-999999";
       const config = userConfigService.getUserConfig(nonExistentUserId);
       expect(config.autoDmMode).toBe(DEFAULT_USER_CONFIG.autoDmMode);
@@ -55,6 +66,7 @@ describe("UserConfigService Unit Tests", () => {
     });
 
     it("should respect on and off overrides", () => {
+      userConfigService.setCacheLoadedForTest(true);
       const onUserId = "user-override-always-on";
       const offUserId = "user-override-always-off";
 

@@ -1211,6 +1211,16 @@ async function handleConfigCommand(
     const res = await userConfigService.setUserConfig(interaction.user.id, {
       autoDmMode: normalized,
     });
+    if (!res.success) {
+      const view = ui.createConfigPanelView(interaction.user, res.config, {
+        title: "설정 변경 실패",
+        description: res.error || "데이터베이스 저장 중 오류가 발생했습니다.",
+        type: "error",
+      });
+      await interaction.editReply(view);
+      return;
+    }
+
     const view = ui.createConfigPanelView(interaction.user, res.config, {
       title: "설정 변경 완료",
       description: `자동 DM 모드가 **${normalized}** (으)로 성공적으로 변경되었습니다.`,
@@ -1235,6 +1245,16 @@ async function handleConfigCommand(
     const res = await userConfigService.setUserConfig(interaction.user.id, {
       dmFormat: normalized,
     });
+    if (!res.success) {
+      const view = ui.createConfigPanelView(interaction.user, res.config, {
+        title: "설정 변경 실패",
+        description: res.error || "데이터베이스 저장 중 오류가 발생했습니다.",
+        type: "error",
+      });
+      await interaction.editReply(view);
+      return;
+    }
+
     const view = ui.createConfigPanelView(interaction.user, res.config, {
       title: "설정 변경 완료",
       description: `DM 메시지 포맷이 **${normalized}** (으)로 성공적으로 변경되었습니다.`,

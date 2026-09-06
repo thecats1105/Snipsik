@@ -8,7 +8,7 @@ flowchart TD
         User["User / Admin"]
         GuildChannel["Watched Channel (messageCreate)"]
         DM["User Direct Message"]
-        SlashCmd["Slash Commands (/link, /watch)"]
+        SlashCmd["Slash Commands (/link)"]
     end
 
     subgraph SnipsikBot ["Snipsik Bot (Bun Runtime)"]
