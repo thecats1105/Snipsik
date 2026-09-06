@@ -8,7 +8,7 @@ flowchart TD
         User["User / Admin"]
         GuildChannel["Watched Channel (messageCreate)"]
         DM["User Direct Message"]
-        SlashCmd["Slash Commands (/link, /watch)"]
+        SlashCmd["Slash Commands (/link)"]
     end
 
     subgraph SnipsikBot ["Snipsik Bot (Bun Runtime)"]
@@ -65,14 +65,14 @@ Snipsik/
     ├── services/
     │   ├── sinkClient.ts       # Sink REST API 통신 클라이언트 (Fetch 기반)
     │   ├── slugManager.ts      # Slug 생성, 유저 해시 인코딩, 커스텀 슬러그 권한 검증기
+    │   ├── userConfigService.ts# 유저별 감시 오버라이드 및 DM 포맷 설정 캐시/CRUD/본문 치환
     │   └── watchService.ts     # Drizzle ORM 기반 Watch 채널 캐시 및 CRUD
     ├── events/
     │   ├── ready.ts            # 봇 구동 및 슬래시 커맨드 등록
-    │   ├── interactionCreate.ts# 슬래시 커맨드, 모달, 버튼, 셀렉트 메뉴 라우터
-    │   └── messageCreate.ts    # Watch 채널 URL 감지 -> 자동 단축 -> DM 발송
+    │   ├── interactionCreate.ts# 슬래시 커맨드, 모달, 버튼, 셀렉트 메뉴, Autocomplete 라우터
+    │   └── messageCreate.ts    # URL 감지 -> 유저 오버라이드 필터링 -> 자동 단축 -> 본문 치환 DM 발송
     ├── commands/
-    │   ├── link.ts             # /link [dashboard|create|custom|list|stats|delete|check]
-    │   └── watch.ts            # /watch [add|remove|list] (서버 관리자 전용)
+    │   └── link.ts             # /link [dashboard|config|create|custom|list|stats|delete|check]
     └── utils/
         ├── logger.ts           # 콘솔 컬러 로거
         ├── ui.ts               # 100% Components v2 기반 메시지 레이아웃 빌더
@@ -83,15 +83,15 @@ Snipsik/
 
 ## 3. 환경 변수 레퍼런스 (`.env`)
 
-| 환경 변수명 | 필수 여부 | 기본값 | 설명 |
-| :--- | :---: | :---: | :--- |
-| `DISCORD_TOKEN` | **필수** | - | 디스코드 봇 토큰 |
-| `DISCORD_CLIENT_ID` | **필수** | - | 디스코드 봇 애플리케이션 ID |
-| `DATABASE_URL` | **필수** | - | Supabase PostgreSQL 연결 문자열 (`postgresql://...`) |
-| `SINK_BASE_URL` | **필수** | `https://s.japsik.com` | 배포된 Sink 인스턴스 도메인 주소 |
-| `SINK_API_TOKEN` | **필수** | - | Sink 인스턴스의 `NUXT_SITE_TOKEN` (API Bearer 인증용) |
-| `RANDOM_SLUG_LENGTH`| 선택 | `3` | 일반 링크 생성 시 앞자리 랜덤 문자열 길이 (2~16) |
-| `ADMIN_USER_IDS` | 선택 | `""` | `/link custom` 생성이 허용된 디스코드 유저 ID (콤마 구분) |
+| 환경 변수명          | 필수 여부 |         기본값         | 설명                                                      |
+| :------------------- | :-------: | :--------------------: | :-------------------------------------------------------- |
+| `DISCORD_TOKEN`      | **필수**  |           -            | 디스코드 봇 토큰                                          |
+| `DISCORD_CLIENT_ID`  | **필수**  |           -            | 디스코드 봇 애플리케이션 ID                               |
+| `DATABASE_URL`       | **필수**  |           -            | Supabase PostgreSQL 연결 문자열 (`postgresql://...`)      |
+| `SINK_BASE_URL`      | **필수**  | `https://s.japsik.com` | 배포된 Sink 인스턴스 도메인 주소                          |
+| `SINK_API_TOKEN`     | **필수**  |           -            | Sink 인스턴스의 `NUXT_SITE_TOKEN` (API Bearer 인증용)     |
+| `RANDOM_SLUG_LENGTH` |   선택    |          `3`           | 일반 링크 생성 시 앞자리 랜덤 문자열 길이 (2~16)          |
+| `ADMIN_USER_IDS`     |   선택    |          `""`          | `/link custom` 생성이 허용된 디스코드 유저 ID (콤마 구분) |
 
 ---
 
@@ -104,15 +104,34 @@ export const watchChannels = pgTable("watch_channels", {
   guildId: text("guild_id").notNull(),
   channelId: text("channel_id").notNull(),
   createdBy: text("created_by").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+// user_configs 테이블 (유저별 감시 오버라이드 및 DM 포맷 설정)
+export const userConfigs = pgTable("user_configs", {
+  userId: text("user_id").primaryKey(),
+  autoDmMode: text("auto_dm_mode").default("inherit").notNull(), // 'inherit' | 'on' | 'off'
+  dmFormat: text("dm_format").default("replace").notNull(), // 'replace' | 'list'
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
 });
 
 // guild_configs 테이블 (서버별 부가 설정)
 export const guildConfigs = pgTable("guild_configs", {
   guildId: text("guild_id").primaryKey(),
   autoShortenEnabled: boolean("auto_shorten_enabled").default(true).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
 });
 ```
 

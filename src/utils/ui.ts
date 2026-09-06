@@ -9,6 +9,7 @@ import {
 } from "discord.js";
 import { CustomId, type UserDashboardStats } from "@/types/bot";
 import type { SinkLink, SinkStats } from "@/types/sink";
+import type { UserConfigData } from "@/services/userConfigService";
 import { getUserHash } from "@/services/slugManager";
 import { sinkClient } from "@/services/sinkClient";
 
@@ -254,6 +255,11 @@ export const ui = {
         .setLabel("새로고침")
         .setEmoji("🔄")
         .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(CustomId.DASHBOARD_CONFIG_BTN)
+        .setLabel("설정")
+        .setEmoji("⚙️")
+        .setStyle(ButtonStyle.Secondary),
     );
 
     components.push(buttonRow);
@@ -397,6 +403,7 @@ export const ui = {
   createWatchDmCard(
     items: Array<{ originalUrl: string; shortenedUrl: string; slug: string }>,
     messageUrl: string,
+    dmFormat: "replace" | "list" = "replace",
   ): EmbedBuilder {
     const lines = items.map((item, idx) => {
       const origTrunc = truncateMiddle(item.originalUrl, 48);
@@ -415,7 +422,10 @@ export const ui = {
       .setTitle("✂️ 긴 URL이 자동으로 단축되었습니다!")
       .setDescription(safeDescription(description))
       .setFooter({
-        text: "아래 메시지에서 단축 URL만 빠르게 복사할 수 있습니다.",
+        text:
+          dmFormat === "replace"
+            ? "아래 메시지에서 URL이 치환된 본문을 빠르게 복사할 수 있습니다."
+            : "아래 메시지에서 단축 URL만 빠르게 복사할 수 있습니다.",
       })
       .setTimestamp();
   },
@@ -480,5 +490,148 @@ export const ui = {
     );
 
     return { embeds: [embed], components: [row] };
+  },
+
+  /**
+   * Builds the interactive Personal Config Panel view.
+   */
+  createConfigPanelView(
+    user: User,
+    userConfig: UserConfigData,
+    notice?: {
+      title: string;
+      description: string;
+      type?: "success" | "info" | "error";
+    },
+  ): {
+    embeds: EmbedBuilder[];
+    components: ActionRowBuilder<ButtonBuilder>[];
+  } {
+    const embeds: EmbedBuilder[] = [];
+
+    if (notice) {
+      const noticeEmbed = new EmbedBuilder()
+        .setColor(
+          notice.type === "error"
+            ? COLORS.DANGER
+            : notice.type === "info"
+              ? COLORS.WARNING
+              : COLORS.SUCCESS,
+        )
+        .setTitle(
+          notice.type === "error"
+            ? `❌ ${notice.title}`
+            : notice.type === "info"
+              ? `ℹ️ ${notice.title}`
+              : `✅ ${notice.title}`,
+        )
+        .setDescription(safeDescription(notice.description))
+        .setTimestamp();
+      embeds.push(noticeEmbed);
+    }
+
+    const autoDmDesc =
+      userConfig.autoDmMode === "inherit"
+        ? "🟢 **서버 설정 따름 (기본값)** — 서버 관리자가 지정한 감시 채널에서만 자동 단축 DM이 발송됩니다."
+        : userConfig.autoDmMode === "on"
+          ? "⚡ **항상 켬 (전체 채널)** — 서버 설정과 무관하게 봇이 접근 가능한 모든 채널에서 자동 단축 DM이 발송됩니다."
+          : "🛑 **항상 끔** — 감시 채널에 등록된 곳이라도 나에게는 일절 DM을 발송하지 않습니다.";
+
+    const formatDesc =
+      userConfig.dmFormat === "replace"
+        ? "💬 **본문 치환 (기본값)** — 원본 메시지 문맥에서 긴 URL만 단축 링크로 고쳐 끼운 완성형 본문을 전송합니다."
+        : "📋 **URL 목록 나열** — 단축된 URL만을 순차 나열하여 모바일 복사에 최적화합니다.";
+
+    const configEmbed = new EmbedBuilder()
+      .setColor(COLORS.PRIMARY)
+      .setAuthor({
+        name: `${user.username}'s 개인 설정 (Config Panel)`,
+        iconURL: user.displayAvatarURL(),
+      })
+      .setDescription(
+        "> 긴 URL 감지 시 동작할 **개인 맞춤 정책**을 설정합니다.\n> 아래 버튼을 탭하면 설정이 즉시 반영됩니다.",
+      )
+      .addFields(
+        {
+          name: "🤖 자동 DM 수신 모드 (`auto_dm`)",
+          value: autoDmDesc,
+          inline: false,
+        },
+        {
+          name: "📝 DM 메시지 포맷 (`dm_format`)",
+          value: formatDesc,
+          inline: false,
+        },
+      )
+      .setFooter({
+        text: "Snipsik • 개인 설정은 모든 서버에서 동일하게 적용됩니다.",
+      })
+      .setTimestamp();
+
+    embeds.push(configEmbed);
+
+    // Row 1: Auto DM Mode Buttons
+    const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(CustomId.CONFIG_DM_INHERIT)
+        .setLabel("상속 (기본)")
+        .setEmoji("🟢")
+        .setStyle(
+          userConfig.autoDmMode === "inherit"
+            ? ButtonStyle.Success
+            : ButtonStyle.Secondary,
+        ),
+      new ButtonBuilder()
+        .setCustomId(CustomId.CONFIG_DM_ON)
+        .setLabel("항상 켬")
+        .setEmoji("⚡")
+        .setStyle(
+          userConfig.autoDmMode === "on"
+            ? ButtonStyle.Success
+            : ButtonStyle.Secondary,
+        ),
+      new ButtonBuilder()
+        .setCustomId(CustomId.CONFIG_DM_OFF)
+        .setLabel("항상 끔")
+        .setEmoji("🛑")
+        .setStyle(
+          userConfig.autoDmMode === "off"
+            ? ButtonStyle.Danger
+            : ButtonStyle.Secondary,
+        ),
+    );
+
+    // Row 2: DM Format Buttons
+    const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(CustomId.CONFIG_FMT_REPLACE)
+        .setLabel("본문 치환 (기본)")
+        .setEmoji("💬")
+        .setStyle(
+          userConfig.dmFormat === "replace"
+            ? ButtonStyle.Success
+            : ButtonStyle.Secondary,
+        ),
+      new ButtonBuilder()
+        .setCustomId(CustomId.CONFIG_FMT_LIST)
+        .setLabel("URL 목록")
+        .setEmoji("📋")
+        .setStyle(
+          userConfig.dmFormat === "list"
+            ? ButtonStyle.Success
+            : ButtonStyle.Secondary,
+        ),
+    );
+
+    // Row 3: Navigation Button
+    const row3 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(CustomId.CONFIG_NAV_DASHBOARD)
+        .setLabel("대시보드로 이동")
+        .setEmoji("📊")
+        .setStyle(ButtonStyle.Primary),
+    );
+
+    return { embeds, components: [row1, row2, row3] };
   },
 };

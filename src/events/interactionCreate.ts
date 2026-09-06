@@ -1,8 +1,13 @@
 import { type Interaction } from "discord.js";
 import { CustomId } from "@/types/bot";
-import { fetchUserDashboardStats, linkCommand } from "@/commands/link";
+import {
+  fetchUserDashboardStats,
+  handleConfigAutocomplete,
+  linkCommand,
+} from "@/commands/link";
 import { sinkClient } from "@/services/sinkClient";
 import { generateSlug, verifyOwnership } from "@/services/slugManager";
+import { userConfigService } from "@/services/userConfigService";
 import { ui } from "@/utils/ui";
 import { createEditLinkModal, createLinkModal } from "@/utils/modals";
 import { parseExpiration } from "@/utils/time";
@@ -12,6 +17,14 @@ export async function onInteractionCreate(
   interaction: Interaction,
 ): Promise<void> {
   try {
+    // 0. Autocomplete Interactions
+    if (interaction.isAutocomplete()) {
+      if (interaction.commandName === "link") {
+        await handleConfigAutocomplete(interaction);
+      }
+      return;
+    }
+
     // 1. Slash Commands
     if (interaction.isChatInputCommand()) {
       if (interaction.commandName === "link") {
@@ -173,6 +186,87 @@ export async function onInteractionCreate(
           undefined,
           page,
         );
+        await interaction.update(view);
+        return;
+      }
+
+      // Open Config Panel from Dashboard
+      if (customId === CustomId.DASHBOARD_CONFIG_BTN) {
+        const userConfig = userConfigService.getUserConfig(interaction.user.id);
+        const view = ui.createConfigPanelView(interaction.user, userConfig);
+        await interaction.update(view);
+        return;
+      }
+
+      // Config Toggle: Auto DM Mode
+      if (
+        customId === CustomId.CONFIG_DM_INHERIT ||
+        customId === CustomId.CONFIG_DM_ON ||
+        customId === CustomId.CONFIG_DM_OFF
+      ) {
+        const targetMode =
+          customId === CustomId.CONFIG_DM_INHERIT
+            ? "inherit"
+            : customId === CustomId.CONFIG_DM_ON
+              ? "on"
+              : "off";
+
+        const res = await userConfigService.setUserConfig(interaction.user.id, {
+          autoDmMode: targetMode,
+        });
+
+        const notice = res.success
+          ? undefined
+          : {
+              title: "설정 변경 실패",
+              description:
+                res.error || "데이터베이스 저장 중 오류가 발생했습니다.",
+              type: "error" as const,
+            };
+
+        const view = ui.createConfigPanelView(
+          interaction.user,
+          res.config,
+          notice,
+        );
+        await interaction.update(view);
+        return;
+      }
+
+      // Config Toggle: DM Format
+      if (
+        customId === CustomId.CONFIG_FMT_REPLACE ||
+        customId === CustomId.CONFIG_FMT_LIST
+      ) {
+        const targetFormat =
+          customId === CustomId.CONFIG_FMT_REPLACE ? "replace" : "list";
+
+        const res = await userConfigService.setUserConfig(interaction.user.id, {
+          dmFormat: targetFormat,
+        });
+
+        const notice = res.success
+          ? undefined
+          : {
+              title: "설정 변경 실패",
+              description:
+                res.error || "데이터베이스 저장 중 오류가 발생했습니다.",
+              type: "error" as const,
+            };
+
+        const view = ui.createConfigPanelView(
+          interaction.user,
+          res.config,
+          notice,
+        );
+        await interaction.update(view);
+        return;
+      }
+
+      // Config Navigation: Return to Dashboard
+      if (customId === CustomId.CONFIG_NAV_DASHBOARD) {
+        const stats = await fetchUserDashboardStats(interaction.user.id);
+        const view = ui.createDashboardView(interaction.user, stats);
         await interaction.update(view);
         return;
       }

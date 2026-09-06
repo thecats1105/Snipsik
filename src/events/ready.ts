@@ -2,6 +2,7 @@ import { ActivityType, Client, REST, Routes } from "discord.js";
 import { config } from "@/config";
 import { linkCommand } from "@/commands/link";
 import { watchService } from "@/services/watchService";
+import { userConfigService } from "@/services/userConfigService";
 import { testDbConnection } from "@/db";
 import { logger } from "@/utils/logger";
 
@@ -19,10 +20,18 @@ export async function onReady(client: Client<true>): Promise<void> {
     status: "online",
   });
 
-  // Initialize DB and load Watcher cache
+  // Initialize DB and load Watcher and UserConfig cache
   const dbOk = await testDbConnection();
   if (dbOk) {
     await watchService.loadCache();
+    try {
+      await userConfigService.loadCache();
+    } catch (err) {
+      logger.error(
+        "Failed to load UserConfig cache on startup; failing closed for auto-DM until cache is loaded:",
+        err,
+      );
+    }
   }
 
   // Register Slash Commands
@@ -36,7 +45,9 @@ export async function onReady(client: Client<true>): Promise<void> {
       body: commands,
     });
 
-    logger.success(`Successfully registered ${commands.length} application commands globally.`);
+    logger.success(
+      `Successfully registered ${commands.length} application commands globally.`,
+    );
   } catch (error) {
     logger.error("Failed to register application commands:", error);
   }

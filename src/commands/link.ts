@@ -1,4 +1,5 @@
 import {
+  type AutocompleteInteraction,
   ChannelType,
   ChatInputCommandInteraction,
   PermissionFlagsBits,
@@ -14,6 +15,11 @@ import {
   verifyOwnership,
 } from "@/services/slugManager";
 import { watchService } from "@/services/watchService";
+import {
+  userConfigService,
+  normalizeAutoDmMode,
+  normalizeDmFormat,
+} from "@/services/userConfigService";
 import { ui } from "@/utils/ui";
 import { parseExpiration } from "@/utils/time";
 import { logger } from "@/utils/logger";
@@ -129,6 +135,28 @@ export const linkCommand: Command = {
         .setName("dashboard")
         .setDescription(
           "유저 개인 전용 일시성(Ephemeral) 인터랙티브 대시보드를 엽니다.",
+        ),
+    )
+    // /link config
+    .addSubcommand((sub) =>
+      sub
+        .setName("config")
+        .setDescription(
+          "개인별 URL 감시 및 DM 전송 설정을 확인하거나 변경합니다.",
+        )
+        .addStringOption((opt) =>
+          opt
+            .setName("key")
+            .setDescription("설정 항목 (auto_dm, dm_format)")
+            .setAutocomplete(true)
+            .setRequired(false),
+        )
+        .addStringOption((opt) =>
+          opt
+            .setName("value")
+            .setDescription("설정할 값 (자동완성 추천 또는 직접 입력)")
+            .setAutocomplete(true)
+            .setRequired(false),
         ),
     )
     // /link create
@@ -426,7 +454,13 @@ export const linkCommand: Command = {
         return;
       }
 
-      // 3. /link create
+      // 4. /link config
+      if (subcommand === "config") {
+        await handleConfigCommand(interaction);
+        return;
+      }
+
+      // 5. /link create
       if (subcommand === "create") {
         await interaction.deferReply({ ephemeral: true });
         const targetUrl = interaction.options.getString("url", true);
@@ -1107,6 +1141,203 @@ async function handleAdminCommand(
       `단축 링크 \`/${cleanSlug}\`이(가) 관리자 권한으로 영구 삭제되었습니다.`,
     );
     await interaction.editReply({ embeds: [successEmbed] });
+    return;
+  }
+}
+
+/**
+ * Handles /link config [key] [value] subcommand
+ */
+async function handleConfigCommand(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  await interaction.deferReply({ ephemeral: true });
+
+  const key = interaction.options.getString("key")?.trim().toLowerCase();
+  const value = interaction.options.getString("value")?.trim();
+
+  const currentConfig = userConfigService.getUserConfig(interaction.user.id);
+
+  // 1. No key passed -> show interactive Config Panel
+  if (!key) {
+    const view = ui.createConfigPanelView(interaction.user, currentConfig);
+    await interaction.editReply(view);
+    return;
+  }
+
+  // 2. Key passed without value -> show current value notice + Config Panel
+  if (value === undefined || value === null || value === "") {
+    let noticeDesc = "";
+    if (key === "auto_dm") {
+      const modeLabel =
+        currentConfig.autoDmMode === "inherit"
+          ? "상속 (서버 설정 따름)"
+          : currentConfig.autoDmMode === "on"
+            ? "항상 켬 (전체 채널)"
+            : "항상 끔";
+      noticeDesc = `현재 \`auto_dm\` 설정값은 **${currentConfig.autoDmMode}** (${modeLabel}) 입니다.`;
+    } else if (key === "dm_format") {
+      const fmtLabel =
+        currentConfig.dmFormat === "replace"
+          ? "본문 치환 (기본값)"
+          : "URL 목록 나열";
+      noticeDesc = `현재 \`dm_format\` 설정값은 **${currentConfig.dmFormat}** (${fmtLabel}) 입니다.`;
+    } else {
+      noticeDesc = `알 수 없는 설정 키입니다: \`${key}\` (지원 키: \`auto_dm\`, \`dm_format\`)`;
+    }
+
+    const view = ui.createConfigPanelView(interaction.user, currentConfig, {
+      title: "현재 설정 조회",
+      description: noticeDesc,
+      type: key === "auto_dm" || key === "dm_format" ? "info" : "error",
+    });
+    await interaction.editReply(view);
+    return;
+  }
+
+  // 3. Both key and value passed -> validate and update
+  if (key === "auto_dm") {
+    const normalized = normalizeAutoDmMode(value);
+    if (!normalized) {
+      const view = ui.createConfigPanelView(interaction.user, currentConfig, {
+        title: "잘못된 설정 값",
+        description: `\`auto_dm\` 설정 값은 \`inherit\`, \`on\`(또는 \`true\`), \`off\`(또는 \`false\`) 중 하나여야 합니다.\n입력값: \`${value}\``,
+        type: "error",
+      });
+      await interaction.editReply(view);
+      return;
+    }
+
+    const res = await userConfigService.setUserConfig(interaction.user.id, {
+      autoDmMode: normalized,
+    });
+    if (!res.success) {
+      const view = ui.createConfigPanelView(interaction.user, res.config, {
+        title: "설정 변경 실패",
+        description: res.error || "데이터베이스 저장 중 오류가 발생했습니다.",
+        type: "error",
+      });
+      await interaction.editReply(view);
+      return;
+    }
+
+    const view = ui.createConfigPanelView(interaction.user, res.config, {
+      title: "설정 변경 완료",
+      description: `자동 DM 모드가 **${normalized}** (으)로 성공적으로 변경되었습니다.`,
+      type: "success",
+    });
+    await interaction.editReply(view);
+    return;
+  }
+
+  if (key === "dm_format") {
+    const normalized = normalizeDmFormat(value);
+    if (!normalized) {
+      const view = ui.createConfigPanelView(interaction.user, currentConfig, {
+        title: "잘못된 설정 값",
+        description: `\`dm_format\` 설정 값은 \`replace\`(본문 치환) 또는 \`list\`(단축 URL 목록) 이어야 합니다.\n입력값: \`${value}\``,
+        type: "error",
+      });
+      await interaction.editReply(view);
+      return;
+    }
+
+    const res = await userConfigService.setUserConfig(interaction.user.id, {
+      dmFormat: normalized,
+    });
+    if (!res.success) {
+      const view = ui.createConfigPanelView(interaction.user, res.config, {
+        title: "설정 변경 실패",
+        description: res.error || "데이터베이스 저장 중 오류가 발생했습니다.",
+        type: "error",
+      });
+      await interaction.editReply(view);
+      return;
+    }
+
+    const view = ui.createConfigPanelView(interaction.user, res.config, {
+      title: "설정 변경 완료",
+      description: `DM 메시지 포맷이 **${normalized}** (으)로 성공적으로 변경되었습니다.`,
+      type: "success",
+    });
+    await interaction.editReply(view);
+    return;
+  }
+
+  // Unknown key
+  const view = ui.createConfigPanelView(interaction.user, currentConfig, {
+    title: "알 수 없는 설정 키",
+    description: `지원하지 않는 설정 키입니다: \`${key}\` (지원 키: \`auto_dm\`, \`dm_format\`)`,
+    type: "error",
+  });
+  await interaction.editReply(view);
+}
+
+/**
+ * Handles Autocomplete for /link config command
+ */
+export async function handleConfigAutocomplete(
+  interaction: AutocompleteInteraction,
+): Promise<void> {
+  const focused = interaction.options.getFocused(true);
+
+  if (focused.name === "key") {
+    const keyChoices = [
+      {
+        name: "auto_dm (자동 DM 수신 모드: inherit / on / off)",
+        value: "auto_dm",
+      },
+      {
+        name: "dm_format (DM 메시지 포맷: replace / list)",
+        value: "dm_format",
+      },
+    ];
+    const filtered = keyChoices.filter(
+      (c) =>
+        c.name.toLowerCase().includes(focused.value.toLowerCase()) ||
+        c.value.toLowerCase().includes(focused.value.toLowerCase()),
+    );
+    await interaction.respond(filtered.slice(0, 25));
+    return;
+  }
+
+  if (focused.name === "value") {
+    const selectedKey = interaction.options
+      .getString("key")
+      ?.trim()
+      .toLowerCase();
+
+    let valueChoices: Array<{ name: string; value: string }> = [];
+
+    if (selectedKey === "auto_dm") {
+      valueChoices = [
+        { name: "inherit - 서버 설정 따름 (기본값)", value: "inherit" },
+        { name: "on - 모든 채널에서 항상 켬 (전역)", value: "on" },
+        { name: "off - 항상 끔 (완전 비활성화)", value: "off" },
+        { name: "true - 켜기 (on)", value: "true" },
+        { name: "false - 끄기 (off)", value: "false" },
+      ];
+    } else if (selectedKey === "dm_format") {
+      valueChoices = [
+        { name: "replace - 메시지 본문 치환 (기본값)", value: "replace" },
+        { name: "list - 단축 URL 목록 나열 (모바일 최적화)", value: "list" },
+      ];
+    } else {
+      valueChoices = [
+        { name: "auto_dm: inherit (서버 설정 따름)", value: "inherit" },
+        { name: "auto_dm: on (항상 켬)", value: "on" },
+        { name: "auto_dm: off (항상 끔)", value: "off" },
+        { name: "dm_format: replace (본문 치환)", value: "replace" },
+        { name: "dm_format: list (URL 목록)", value: "list" },
+      ];
+    }
+
+    const filtered = valueChoices.filter(
+      (c) =>
+        c.name.toLowerCase().includes(focused.value.toLowerCase()) ||
+        c.value.toLowerCase().includes(focused.value.toLowerCase()),
+    );
+    await interaction.respond(filtered.slice(0, 25));
     return;
   }
 }

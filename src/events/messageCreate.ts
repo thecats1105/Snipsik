@@ -1,6 +1,7 @@
 import { Message } from "discord.js";
 import { config } from "@/config";
 import { watchService } from "@/services/watchService";
+import { userConfigService } from "@/services/userConfigService";
 import { generateSlug } from "@/services/slugManager";
 import { sinkClient } from "@/services/sinkClient";
 import { ui } from "@/utils/ui";
@@ -16,8 +17,14 @@ export async function onMessageCreate(message: Message): Promise<void> {
   // Only check guild messages
   if (!message.guildId || !message.guild) return;
 
-  // Fast O(1) in-memory check if the channel is watched
-  if (!watchService.isWatched(message.guildId, message.channelId)) {
+  // Fast O(1) in-memory check if user wants DM (tri-state override + channel watch)
+  const isChannelWatched = watchService.isWatched(
+    message.guildId,
+    message.channelId,
+  );
+  if (
+    !userConfigService.shouldProcessUser(message.author.id, isChannelWatched)
+  ) {
     return;
   }
 
@@ -98,13 +105,18 @@ export async function onMessageCreate(message: Message): Promise<void> {
   if (shortenedItems.length === 0) return;
 
   try {
+    const userConfig = userConfigService.getUserConfig(message.author.id);
     const dmChannel = await message.author.createDM();
     let embedSent = false;
     let textSentCount = 0;
 
     // 1. Send DM Card (Overview embed)
     try {
-      const dmEmbed = ui.createWatchDmCard(shortenedItems, message.url);
+      const dmEmbed = ui.createWatchDmCard(
+        shortenedItems,
+        message.url,
+        userConfig.dmFormat,
+      );
       await dmChannel.send({ embeds: [dmEmbed] });
       embedSent = true;
     } catch (embedErr) {
@@ -114,31 +126,67 @@ export async function onMessageCreate(message: Message): Promise<void> {
       );
     }
 
-    // 2. Send Pure Plain Text URLs sequentially (Mobile Long-press copy optimization)
-    for (const item of shortenedItems) {
-      try {
-        await dmChannel.send(item.shortenedUrl);
-        textSentCount++;
-      } catch (textErr) {
+    // 2. Send 2nd message based on user format preference
+    if (userConfig.dmFormat === "replace") {
+      // Reconstructed message with URLs replaced
+      const reconstructed = userConfigService.replaceUrlsInText(
+        content,
+        shortenedItems,
+      );
+      const chunks = userConfigService.chunkText(reconstructed, 2000);
+
+      for (const chunk of chunks) {
+        try {
+          await dmChannel.send(chunk);
+          textSentCount++;
+        } catch (textErr) {
+          logger.warn(
+            `Failed to send replaced message chunk to ${message.author.tag}:`,
+            textErr,
+          );
+        }
+      }
+
+      if (embedSent && textSentCount === chunks.length) {
+        logger.success(
+          `Successfully sent replaced message DM (${chunks.length} chunk(s)) to ${message.author.tag}`,
+        );
+      } else if (embedSent || textSentCount > 0) {
         logger.warn(
-          `Failed to send plain text URL ${item.shortenedUrl} to ${message.author.tag}:`,
-          textErr,
+          `Partially sent replaced message DM to ${message.author.tag} (Embed: ${embedSent ? "OK" : "Failed"}, Chunks: ${textSentCount}/${chunks.length})`,
+        );
+      } else {
+        logger.error(
+          `Failed to deliver replaced message DM to ${message.author.tag}`,
         );
       }
-    }
-
-    if (embedSent && textSentCount === shortenedItems.length) {
-      logger.success(
-        `Successfully sent all ${shortenedItems.length} auto-shortened link(s) DM to ${message.author.tag}`,
-      );
-    } else if (embedSent || textSentCount > 0) {
-      logger.warn(
-        `Partially sent auto-shortened link(s) DM to ${message.author.tag} (Embed: ${embedSent ? "OK" : "Failed"}, URLs: ${textSentCount}/${shortenedItems.length})`,
-      );
     } else {
-      logger.error(
-        `Failed to deliver any auto-shortened link(s) DM to ${message.author.tag}`,
-      );
+      // Legacy: Send Pure Plain Text URLs sequentially (Mobile Long-press copy optimization)
+      for (const item of shortenedItems) {
+        try {
+          await dmChannel.send(item.shortenedUrl);
+          textSentCount++;
+        } catch (textErr) {
+          logger.warn(
+            `Failed to send plain text URL ${item.shortenedUrl} to ${message.author.tag}:`,
+            textErr,
+          );
+        }
+      }
+
+      if (embedSent && textSentCount === shortenedItems.length) {
+        logger.success(
+          `Successfully sent all ${shortenedItems.length} auto-shortened link(s) DM to ${message.author.tag}`,
+        );
+      } else if (embedSent || textSentCount > 0) {
+        logger.warn(
+          `Partially sent auto-shortened link(s) DM to ${message.author.tag} (Embed: ${embedSent ? "OK" : "Failed"}, URLs: ${textSentCount}/${shortenedItems.length})`,
+        );
+      } else {
+        logger.error(
+          `Failed to deliver any auto-shortened link(s) DM to ${message.author.tag}`,
+        );
+      }
     }
   } catch (err) {
     logger.error(`Failed to open DM channel with ${message.author.tag}:`, err);
