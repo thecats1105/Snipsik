@@ -371,7 +371,7 @@ export const ui = {
 
     const description = [
       "### ✂️ 긴 URL이 자동으로 단축되었습니다!",
-      `> 📍 **원본 메시지:** [메시지로 바로가기 ↗](${messageUrl})`,
+      `> 📍 **원본 메시지:** ${messageUrl}`,
       "",
       "**단축된 링크 목록:**",
       ...lines,
