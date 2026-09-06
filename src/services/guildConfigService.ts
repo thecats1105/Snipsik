@@ -22,6 +22,41 @@ class GuildConfigService {
   // In-memory cache for O(1) sync lookups in messageCreate
   private cache: Map<string, GuildConfigData> = new Map();
   private cacheLoaded: boolean = false;
+  private isReloadingCache: boolean = false;
+  private nextReloadAllowedAt: number = 0;
+  private cacheEpoch: number = 0;
+  private static readonly RELOAD_COOLDOWN_MS = 10_000;
+
+  /**
+   * Triggers a non-blocking background attempt to reload guild configs cache if currently unloaded.
+   * Throttled by a cooldown period to prevent log and database connection storms.
+   */
+  triggerBackgroundReload(): void {
+    const now = Date.now();
+    if (
+      this.isReloadingCache ||
+      this.cacheLoaded ||
+      now < this.nextReloadAllowedAt
+    ) {
+      return;
+    }
+    this.isReloadingCache = true;
+    this.loadCache()
+      .then(() => {
+        this.nextReloadAllowedAt = 0;
+      })
+      .catch((err) => {
+        this.nextReloadAllowedAt =
+          Date.now() + GuildConfigService.RELOAD_COOLDOWN_MS;
+        logger.warn(
+          `Background retry loading guild configs cache failed (cooldown ${GuildConfigService.RELOAD_COOLDOWN_MS}ms):`,
+          err,
+        );
+      })
+      .finally(() => {
+        this.isReloadingCache = false;
+      });
+  }
 
   /**
    * Sets cache loaded status (used for testing or manual state control).
@@ -42,18 +77,33 @@ class GuildConfigService {
   }
 
   /**
-   * Loads all guild configs into memory on bot startup.
+   * Loads all guild configs into memory on bot startup or retry.
+   * Synchronizes with concurrent writes using cacheEpoch to avoid clobbering newer rows.
    */
   async loadCache(): Promise<void> {
+    const startEpoch = this.cacheEpoch;
     try {
       const records = await db.select().from(guildConfigs);
-      this.cache.clear();
-      for (const record of records) {
-        this.cache.set(record.guildId, {
-          guildId: record.guildId,
-          autoShortenEnabled: record.autoShortenEnabled,
-          autoShortenMinUrlLength: record.autoShortenMinUrlLength ?? null,
-        });
+      if (this.cacheEpoch === startEpoch) {
+        this.cache.clear();
+        for (const record of records) {
+          this.cache.set(record.guildId, {
+            guildId: record.guildId,
+            autoShortenEnabled: record.autoShortenEnabled,
+            autoShortenMinUrlLength: record.autoShortenMinUrlLength ?? null,
+          });
+        }
+      } else {
+        // A newer write occurred while query was in-flight; merge without clobbering newly written keys
+        for (const record of records) {
+          if (!this.cache.has(record.guildId)) {
+            this.cache.set(record.guildId, {
+              guildId: record.guildId,
+              autoShortenEnabled: record.autoShortenEnabled,
+              autoShortenMinUrlLength: record.autoShortenMinUrlLength ?? null,
+            });
+          }
+        }
       }
       this.cacheLoaded = true;
       logger.info(
@@ -153,7 +203,11 @@ class GuildConfigService {
         autoShortenMinUrlLength: saved.autoShortenMinUrlLength ?? null,
       };
 
+      this.cacheEpoch++;
       this.cache.set(guildId, savedConfig);
+      if (!this.cacheLoaded) {
+        this.triggerBackgroundReload();
+      }
       logger.info(
         `Updated guild config for ${guildId}: autoShortenEnabled=${savedConfig.autoShortenEnabled}, autoShortenMinUrlLength=${savedConfig.autoShortenMinUrlLength}`,
       );
@@ -191,6 +245,9 @@ class GuildConfigService {
     }
 
     if (guildId) {
+      if (!this.cacheLoaded) {
+        this.triggerBackgroundReload();
+      }
       const guildCfg = this.getGuildConfig(guildId);
       if (
         guildCfg.autoShortenMinUrlLength !== null &&

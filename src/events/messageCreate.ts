@@ -8,8 +8,47 @@ import { sinkClient } from "@/services/sinkClient";
 import { ui } from "@/utils/ui";
 import { logger } from "@/utils/logger";
 
-// URL extraction regex
-const URL_REGEX = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
+// URL extraction regex (permits query string pipes | while excluding whitespace, angle/curly brackets, backticks, quotes, and backslashes)
+const URL_REGEX = /https?:\/\/[^\s<>"^`{}\\]+/gi;
+
+/**
+ * Trims trailing delimiters and formatting characters from extracted URLs.
+ * Handles Discord spoiler tags (||), unbalanced closing parentheses/brackets,
+ * while preserving valid trailing pipe characters in query data and URL content
+ * unless they form a verified closing spoiler delimiter.
+ *
+ * @param rawUrl - The raw extracted URL candidate.
+ * @param isEnclosedInSpoiler - Whether the URL match was immediately preceded by a Discord spoiler tag (||).
+ * @returns The sanitized URL string.
+ */
+export function cleanExtractedUrl(
+  rawUrl: string,
+  isEnclosedInSpoiler = false,
+): string {
+  let url = rawUrl;
+
+  // 1. Strip trailing Discord spoiler delimiter (||) only when verified by enclosing spoiler context
+  if (isEnclosedInSpoiler && url.endsWith("||")) {
+    url = url.slice(0, -2);
+  }
+
+  // 2. Strip unbalanced closing parentheses or brackets (e.g. "(https://...)" or "[https://...]")
+  while (url.endsWith(")") || url.endsWith("]")) {
+    const lastChar = url.slice(-1);
+    const openChar = lastChar === ")" ? "(" : "[";
+    const openCount = (url.match(new RegExp(`\\${openChar}`, "g")) || [])
+      .length;
+    const closeCount = (url.match(new RegExp(`\\${lastChar}`, "g")) || [])
+      .length;
+    if (closeCount > openCount) {
+      url = url.slice(0, -1);
+    } else {
+      break;
+    }
+  }
+
+  return url;
+}
 
 /**
  * Sanitizes a URL for logging by removing sensitive query parameters and fragments.
@@ -154,8 +193,23 @@ export async function onMessageCreate(message: Message): Promise<void> {
   const content = message.content;
   if (!content) return;
 
-  const matches = content.match(URL_REGEX);
-  if (!matches || matches.length === 0) return;
+  // Extract candidates along with spoiler enclosure context
+  const regex = new RegExp(URL_REGEX.source, URL_REGEX.flags);
+  const rawMatches: Array<{ rawMatch: string; isEnclosedInSpoiler: boolean }> =
+    [];
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(content)) !== null) {
+    const matchIndex = match.index;
+    const isEnclosedInSpoiler =
+      matchIndex >= 2 && content.substring(matchIndex - 2, matchIndex) === "||";
+    rawMatches.push({
+      rawMatch: match[0],
+      isEnclosedInSpoiler,
+    });
+  }
+
+  if (rawMatches.length === 0) return;
 
   const sinkHostname = new URL(config.SINK_BASE_URL).hostname.toLowerCase();
   const effectiveMinLength = guildConfigService.resolveEffectiveMinUrlLength(
@@ -167,7 +221,8 @@ export async function onMessageCreate(message: Message): Promise<void> {
   const seenUrls = new Set<string>();
   const validUrls: string[] = [];
 
-  for (const rawUrl of matches) {
+  for (const { rawMatch, isEnclosedInSpoiler } of rawMatches) {
+    const rawUrl = cleanExtractedUrl(rawMatch, isEnclosedInSpoiler);
     try {
       const parsedUrl = new URL(rawUrl);
 

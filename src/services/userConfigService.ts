@@ -113,6 +113,41 @@ class UserConfigService {
   // In-memory cache for O(1) sync lookups in messageCreate
   private cache: Map<string, UserConfigData> = new Map();
   private cacheLoaded: boolean = false;
+  private isReloadingCache: boolean = false;
+  private nextReloadAllowedAt: number = 0;
+  private cacheEpoch: number = 0;
+  private static readonly RELOAD_COOLDOWN_MS = 10_000;
+
+  /**
+   * Triggers a non-blocking background attempt to reload user configs cache if currently unloaded.
+   * Throttled by a cooldown period to prevent log and database connection storms.
+   */
+  triggerBackgroundReload(): void {
+    const now = Date.now();
+    if (
+      this.isReloadingCache ||
+      this.cacheLoaded ||
+      now < this.nextReloadAllowedAt
+    ) {
+      return;
+    }
+    this.isReloadingCache = true;
+    this.loadCache()
+      .then(() => {
+        this.nextReloadAllowedAt = 0;
+      })
+      .catch((err) => {
+        this.nextReloadAllowedAt =
+          Date.now() + UserConfigService.RELOAD_COOLDOWN_MS;
+        logger.warn(
+          `Background retry loading user configs cache failed (cooldown ${UserConfigService.RELOAD_COOLDOWN_MS}ms):`,
+          err,
+        );
+      })
+      .finally(() => {
+        this.isReloadingCache = false;
+      });
+  }
 
   /**
    * Sets cache loaded status (used for testing or manual state control).
@@ -133,21 +168,41 @@ class UserConfigService {
   }
 
   /**
-   * Loads all user configs into memory on bot startup.
+   * Loads all user configs into memory on bot startup or retry.
+   * Synchronizes with concurrent writes using cacheEpoch to avoid clobbering newer rows.
    */
   async loadCache(): Promise<void> {
+    const startEpoch = this.cacheEpoch;
     try {
       const records = await db.select().from(userConfigs);
-      this.cache.clear();
-      for (const record of records) {
-        const autoDmMode = normalizeAutoDmMode(record.autoDmMode) ?? "inherit";
-        const dmFormat = normalizeDmFormat(record.dmFormat) ?? "replace";
-        this.cache.set(record.userId, {
-          userId: record.userId,
-          autoDmMode,
-          dmFormat,
-          autoShortenMinUrlLength: record.autoShortenMinUrlLength ?? null,
-        });
+      if (this.cacheEpoch === startEpoch) {
+        this.cache.clear();
+        for (const record of records) {
+          const autoDmMode =
+            normalizeAutoDmMode(record.autoDmMode) ?? "inherit";
+          const dmFormat = normalizeDmFormat(record.dmFormat) ?? "replace";
+          this.cache.set(record.userId, {
+            userId: record.userId,
+            autoDmMode,
+            dmFormat,
+            autoShortenMinUrlLength: record.autoShortenMinUrlLength ?? null,
+          });
+        }
+      } else {
+        // A newer write occurred while query was in-flight; merge without clobbering newly written keys
+        for (const record of records) {
+          if (!this.cache.has(record.userId)) {
+            const autoDmMode =
+              normalizeAutoDmMode(record.autoDmMode) ?? "inherit";
+            const dmFormat = normalizeDmFormat(record.dmFormat) ?? "replace";
+            this.cache.set(record.userId, {
+              userId: record.userId,
+              autoDmMode,
+              dmFormat,
+              autoShortenMinUrlLength: record.autoShortenMinUrlLength ?? null,
+            });
+          }
+        }
       }
       this.cacheLoaded = true;
       logger.info(`Loaded ${records.length} user config(s) into memory cache.`);
@@ -261,7 +316,11 @@ class UserConfigService {
         autoShortenMinUrlLength: saved.autoShortenMinUrlLength ?? null,
       };
 
+      this.cacheEpoch++;
       this.cache.set(userId, savedConfig);
+      if (!this.cacheLoaded) {
+        this.triggerBackgroundReload();
+      }
       logger.info(
         `Updated user config for ${userId}: autoDmMode=${savedConfig.autoDmMode}, dmFormat=${savedConfig.dmFormat}, autoShortenMinUrlLength=${savedConfig.autoShortenMinUrlLength}`,
       );
@@ -279,11 +338,13 @@ class UserConfigService {
   /**
    * Determines whether the bot should auto-shorten URLs and send DM to the user.
    * Fails closed (returns false) if the cache is not loaded to prevent privacy leaks.
+   * Schedules a background cache reload if cache is currently not loaded.
    */
   shouldProcessUser(userId: string, isChannelWatched: boolean): boolean {
     if (!this.cacheLoaded) {
+      this.triggerBackgroundReload();
       logger.warn(
-        `UserConfig cache not loaded; failing closed for user ${userId}`,
+        `UserConfig cache not loaded; failing closed for user ${userId} and scheduled background reload`,
       );
       return false;
     }
