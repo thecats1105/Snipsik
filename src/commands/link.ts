@@ -449,7 +449,7 @@ export const linkCommand: Command = {
       // 3. /link dashboard
       if (subcommand === "dashboard") {
         await interaction.deferReply({
-          flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+          flags: MessageFlags.Ephemeral,
         });
         const stats = await fetchUserDashboardStats(interaction.user.id);
         const view = ui.createDashboardView(interaction.user, stats);
@@ -466,7 +466,7 @@ export const linkCommand: Command = {
       // 5. /link create
       if (subcommand === "create") {
         await interaction.deferReply({
-          flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+          flags: MessageFlags.Ephemeral,
         });
         const targetUrl = interaction.options.getString("url", true);
         const expStr = interaction.options.getString("expiration");
@@ -516,7 +516,7 @@ export const linkCommand: Command = {
       // 4. /link custom
       if (subcommand === "custom") {
         await interaction.deferReply({
-          flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+          flags: MessageFlags.Ephemeral,
         });
         const targetUrl = interaction.options.getString("url", true);
         const customSlug = interaction.options.getString("custom_slug", true);
@@ -584,7 +584,7 @@ export const linkCommand: Command = {
       // 5. /link list
       if (subcommand === "list") {
         await interaction.deferReply({
-          flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+          flags: MessageFlags.Ephemeral,
         });
         const inputTag = interaction.options.getString("tag")?.trim();
         const page = interaction.options.getInteger("page") || 1;
@@ -669,7 +669,7 @@ export const linkCommand: Command = {
       // 6. /link stats
       if (subcommand === "stats") {
         await interaction.deferReply({
-          flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+          flags: MessageFlags.Ephemeral,
         });
         const slug = interaction.options.getString("slug", true).trim();
 
@@ -700,7 +700,7 @@ export const linkCommand: Command = {
       // 7. /link delete
       if (subcommand === "delete") {
         await interaction.deferReply({
-          flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+          flags: MessageFlags.Ephemeral,
         });
         const slug = interaction.options.getString("slug", true).trim();
 
@@ -734,7 +734,7 @@ export const linkCommand: Command = {
       // 8. /link check
       if (subcommand === "check") {
         await interaction.deferReply({
-          flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+          flags: MessageFlags.Ephemeral,
         });
         const targetUrl = interaction.options.getString("url", true).trim();
 
@@ -802,7 +802,7 @@ async function handleWatchCommand(
   }
 
   await interaction.deferReply({
-    flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+    flags: MessageFlags.Ephemeral,
   });
 
   if (subcommand === "add") {
@@ -899,7 +899,7 @@ async function handleAdminCommand(
   }
 
   await interaction.deferReply({
-    flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+    flags: MessageFlags.Ephemeral,
   });
 
   // 1. /link admin overview
@@ -1171,7 +1171,7 @@ async function handleConfigCommand(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
   await interaction.deferReply({
-    flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+    flags: MessageFlags.Ephemeral,
   });
 
   const key = interaction.options.getString("key")?.trim().toLowerCase();
