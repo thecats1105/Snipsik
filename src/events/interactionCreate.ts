@@ -21,6 +21,11 @@ import {
 import { parseExpiration } from "@/utils/time";
 import { logger } from "@/utils/logger";
 
+/**
+ * Handles incoming Discord interactions including slash commands, buttons, and modals.
+ *
+ * @param interaction - Received Discord interaction payload
+ */
 export async function onInteractionCreate(
   interaction: Interaction,
 ): Promise<void> {

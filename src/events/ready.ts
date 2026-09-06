@@ -7,6 +7,12 @@ import { guildConfigService } from "@/services/guildConfigService";
 import { testDbConnection } from "@/db";
 import { logger } from "@/utils/logger";
 
+/**
+ * Handles the Discord client ready event.
+ * Initializes presence, warms up database caches, and syncs application slash commands.
+ *
+ * @param client - Ready Discord client instance
+ */
 export async function onReady(client: Client<true>): Promise<void> {
   logger.success(`Logged in as ${client.user.tag} (ID: ${client.user.id})`);
 
