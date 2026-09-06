@@ -173,6 +173,13 @@ describe("Discord Components v2 UI Modules", () => {
         (c: { type: number }) => c.type === 1,
       );
       expect(hasActionRow).toBe(false);
+
+      // Verify original message URL is rendered directly without markdown []() link formatting
+      const jsonStr = JSON.stringify(json);
+      expect(jsonStr).toContain(
+        "> 📍 **원본 메시지:** https://discord.com/channels/1/2/3",
+      );
+      expect(jsonStr).not.toContain("[메시지로 바로가기 ↗]");
     });
   });
 
