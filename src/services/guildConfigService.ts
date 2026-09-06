@@ -25,6 +25,8 @@ class GuildConfigService {
 
   /**
    * Sets cache loaded status (used for testing or manual state control).
+   *
+   * @param loaded - Cache loaded status flag.
    */
   setCacheLoadedForTest(loaded: boolean): void {
     this.cacheLoaded = loaded;
@@ -32,6 +34,8 @@ class GuildConfigService {
 
   /**
    * Whether the cache has been successfully loaded from database.
+   *
+   * @returns True if cache is loaded, false otherwise.
    */
   isCacheLoaded(): boolean {
     return this.cacheLoaded;
@@ -64,6 +68,9 @@ class GuildConfigService {
 
   /**
    * Returns the current config for a guild (from memory cache or default).
+   *
+   * @param guildId - Discord guild snowflake ID.
+   * @returns Guild configuration data.
    */
   getGuildConfig(guildId: string): GuildConfigData {
     const cached = this.cache.get(guildId);
@@ -79,6 +86,10 @@ class GuildConfigService {
   /**
    * Updates or creates a guild config in both DB and memory cache.
    * Modifies only supplied fields on conflict and syncs cache from returned merged row.
+   *
+   * @param guildId - Discord guild snowflake ID.
+   * @param updates - Partial configuration updates.
+   * @returns Operation success status and updated config.
    */
   async setGuildConfig(
     guildId: string,
@@ -162,6 +173,10 @@ class GuildConfigService {
    * 1. User config override (if set and not null)
    * 2. Guild config override (if set and not null)
    * 3. Global ENV default (config.AUTO_SHORTEN_MIN_URL_LENGTH, default 70)
+   *
+   * @param guildId - Discord guild snowflake ID (or null/undefined)
+   * @param userId - Discord user snowflake ID
+   * @returns Effective minimum URL length threshold
    */
   resolveEffectiveMinUrlLength(
     guildId: string | null | undefined,

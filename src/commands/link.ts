@@ -28,6 +28,12 @@ import { ui } from "@/utils/ui";
 import { parseExpiration } from "@/utils/time";
 import { logger } from "@/utils/logger";
 
+/**
+ * Fetches link statistics and dashboard summary for a specific Discord user.
+ *
+ * @param userId - Discord user snowflake ID
+ * @returns Aggregated UserDashboardStats object containing link counts and click totals
+ */
 export async function fetchUserDashboardStats(
   userId: string,
 ): Promise<UserDashboardStats> {
@@ -792,7 +798,10 @@ export const linkCommand: Command = {
 };
 
 /**
- * Handles /link watch [add|remove|list] subcommands
+ * Handles /link watch [add|remove|list|min-length] subcommands.
+ *
+ * @param interaction - Chat input command interaction
+ * @param subcommand - Name of the subcommand executed
  */
 async function handleWatchCommand(
   interaction: ChatInputCommandInteraction,
@@ -1242,7 +1251,9 @@ async function handleAdminCommand(
 }
 
 /**
- * Handles /link config [key] [value] subcommand
+ * Handles /link config [key] [value] subcommand.
+ *
+ * @param interaction - Chat input command interaction
  */
 async function handleConfigCommand(
   interaction: ChatInputCommandInteraction,
@@ -1496,7 +1507,9 @@ async function handleConfigCommand(
 }
 
 /**
- * Handles Autocomplete for /link config command
+ * Handles Autocomplete for /link config command.
+ *
+ * @param interaction - Autocomplete interaction
  */
 export async function handleConfigAutocomplete(
   interaction: AutocompleteInteraction,

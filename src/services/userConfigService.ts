@@ -116,6 +116,8 @@ class UserConfigService {
 
   /**
    * Sets cache loaded status (used for testing or manual state control).
+   *
+   * @param loaded - Cache loaded status flag.
    */
   setCacheLoadedForTest(loaded: boolean): void {
     this.cacheLoaded = loaded;
@@ -123,6 +125,8 @@ class UserConfigService {
 
   /**
    * Whether the cache has been successfully loaded from database.
+   *
+   * @returns True if cache is loaded, false otherwise.
    */
   isCacheLoaded(): boolean {
     return this.cacheLoaded;
@@ -156,6 +160,9 @@ class UserConfigService {
 
   /**
    * Returns the current config for a user (from memory cache or default).
+   *
+   * @param userId - Discord user snowflake ID.
+   * @returns User configuration data.
    */
   getUserConfig(userId: string): UserConfigData {
     const cached = this.cache.get(userId);
@@ -171,6 +178,10 @@ class UserConfigService {
   /**
    * Updates or creates a user config in both DB and memory cache.
    * Modifies only supplied fields on conflict and syncs cache from returned merged row.
+   *
+   * @param userId - Discord user snowflake ID.
+   * @param updates - Partial configuration updates.
+   * @returns Operation success status and updated config.
    */
   async setUserConfig(
     userId: string,
