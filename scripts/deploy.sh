@@ -125,16 +125,48 @@ start_new_container() {
 }
 
 verify_health() {
-  echo "==> 7. Verifying container health..."
-  sleep 5
-  if ! is_container_running "$CONTAINER_NAME"; then
-    echo "Error: Container exited unexpectedly! Logs:" >&2
-    dcmd logs --tail 30 "$CONTAINER_NAME" >&2 || true
-    rollback_container
-    exit 1
-  fi
+  echo "==> 7. Verifying container health and readiness..."
+  local max_retries=10
+  local retry_delay=2
+  local is_ready=0
 
-  # Clean up backup container after successful verification
+  for ((i=1; i<=max_retries; i++)); do
+    local state
+    state="$(dcmd inspect -f '{{.State.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo 'unknown')"
+
+    if [ "$state" != "running" ]; then
+      echo "Error: Container status is '${state}' (expected 'running')! Logs:" >&2
+      dcmd logs --tail 30 "$CONTAINER_NAME" >&2 || true
+      rollback_container
+      exit 1
+    fi
+
+    # Check if Discord bot has successfully initialized and logged in
+    if dcmd logs --tail 50 "$CONTAINER_NAME" 2>&1 | grep -q "Logged in as"; then
+      echo "Container readiness verified: Bot logged in successfully."
+      is_ready=1
+      break
+    fi
+
+    echo "Waiting for container readiness (${i}/${max_retries})..."
+    sleep "$retry_delay"
+  done
+
+  # If not explicitly matched 'Logged in as' within timeout window, ensure it remained stably running
+  if [ "$is_ready" -eq 0 ]; then
+    if ! is_container_running "$CONTAINER_NAME"; then
+      echo "Error: Container exited unexpectedly! Logs:" >&2
+      dcmd logs --tail 30 "$CONTAINER_NAME" >&2 || true
+      rollback_container
+      exit 1
+    fi
+    echo "Container health verified: Container is stably running."
+  fi
+}
+
+cleanup_and_finish() {
+  echo "==> 8. Cleaning up obsolete resources..."
+  # Clean up backup container after all verifications pass
   if [ "$HAS_OLD" -eq 1 ]; then
     dcmd rm -f "$BACKUP_CONTAINER" 2>/dev/null || true
   fi
@@ -148,10 +180,8 @@ verify_health() {
       dcmd rmi "$PREVIOUS_IMAGE_ID" 2>/dev/null || true
     fi
   fi
-}
 
-cleanup_and_finish() {
-  echo "==> 8. Cleaning up dangling images..."
+  echo "Cleaning up dangling images..."
   dcmd image prune -f
 
   echo "==> 9. Deployment succeeded! Container status:"
