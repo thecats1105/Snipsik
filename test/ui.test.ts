@@ -184,6 +184,36 @@ describe("Discord Components v2 UI Modules", () => {
       );
       expect(jsonStr).not.toContain("[메시지로 바로가기 ↗]");
     });
+
+    it("renders reused link label when isReused is true", () => {
+      const view = ui.createWatchDmCard(
+        [
+          {
+            originalUrl: "https://verylongurl.com/a/b/c",
+            shortenedUrl: "https://s.japsik.com/reused-123",
+            slug: "reused-123",
+            isReused: true,
+          },
+          {
+            originalUrl: "https://anotherlongurl.com/x/y/z",
+            shortenedUrl: "https://s.japsik.com/new-123",
+            slug: "new-123",
+            isReused: false,
+          },
+        ],
+        "https://discord.com/channels/1/2/3",
+        "replace",
+      );
+
+      const jsonStr = JSON.stringify(view.components[0].toJSON());
+      expect(jsonStr).toContain(
+        "`https://s.japsik.com/reused-123` *(기존 링크 재사용)*",
+      );
+      expect(jsonStr).toContain("`https://s.japsik.com/new-123`\\n");
+      expect(jsonStr).not.toContain(
+        "`https://s.japsik.com/new-123` *(기존 링크 재사용)*",
+      );
+    });
   });
 
   describe("Simple messages (Success, Error, Info)", () => {

@@ -353,7 +353,12 @@ export const ui = {
    * Creates a card for DM notifications sent when watching channels using ContainerBuilder.
    */
   createWatchDmCard(
-    items: Array<{ originalUrl: string; shortenedUrl: string; slug: string }>,
+    items: Array<{
+      originalUrl: string;
+      shortenedUrl: string;
+      slug: string;
+      isReused?: boolean;
+    }>,
     messageUrl: string,
     dmFormat: "replace" | "list" = "replace",
   ): V2MessageView {
@@ -361,7 +366,8 @@ export const ui = {
 
     const lines = items.map((item, idx) => {
       const origTrunc = truncateMiddle(item.originalUrl, 48);
-      return `**${idx + 1}.** \`${item.shortenedUrl}\`\n   ↳ 원본: \`${origTrunc}\``;
+      const reusedLabel = item.isReused ? " *(기존 링크 재사용)*" : "";
+      return `**${idx + 1}.** \`${item.shortenedUrl}\`${reusedLabel}\n   ↳ 원본: \`${origTrunc}\``;
     });
 
     const footerNotice =

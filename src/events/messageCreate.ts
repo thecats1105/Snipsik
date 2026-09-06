@@ -2,7 +2,7 @@ import { Message, MessageFlags } from "discord.js";
 import { config } from "@/config";
 import { watchService } from "@/services/watchService";
 import { userConfigService } from "@/services/userConfigService";
-import { generateSlug } from "@/services/slugManager";
+import { generateSlug, verifyOwnership } from "@/services/slugManager";
 import { sinkClient } from "@/services/sinkClient";
 import { ui } from "@/utils/ui";
 import { logger } from "@/utils/logger";
@@ -74,28 +74,77 @@ export async function onMessageCreate(message: Message): Promise<void> {
     originalUrl: string;
     shortenedUrl: string;
     slug: string;
+    isReused?: boolean;
   }> = [];
 
   for (const originalUrl of validUrls) {
     try {
-      const slug = generateSlug(message.author.id);
-      const res = await sinkClient.createLink({
-        url: originalUrl,
-        slug,
-      });
+      let resolvedSlug: string | null = null;
+      let isReused = false;
 
-      if (res.success && res.link) {
-        const resolvedSlug = res.link.slug || slug;
+      // 1. Check if an active short link already exists for this user and URL
+      try {
+        const searchRes = await sinkClient.searchLinks({
+          url: originalUrl,
+          status: "active",
+          limit: 20,
+        });
+
+        if (searchRes.success && searchRes.list && searchRes.list.length > 0) {
+          const userLinks = searchRes.list.filter((l) =>
+            verifyOwnership(l.slug, message.author.id),
+          );
+
+          if (userLinks.length > 0) {
+            userLinks.sort((a, b) => {
+              const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+              const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+              return timeB - timeA;
+            });
+
+            const existingLink = userLinks[0];
+            if (existingLink && existingLink.slug) {
+              resolvedSlug = existingLink.slug;
+              isReused = true;
+              logger.info(
+                `Reusing existing short link /${resolvedSlug} for ${message.author.tag} (${originalUrl})`,
+              );
+            }
+          }
+        }
+      } catch (searchErr) {
+        logger.warn(
+          `Failed to search existing links for URL ${originalUrl}, falling back to creation:`,
+          searchErr,
+        );
+      }
+
+      // 2. If no existing active link was found, create a new one
+      if (!resolvedSlug) {
+        const slug = generateSlug(message.author.id);
+        const res = await sinkClient.createLink({
+          url: originalUrl,
+          slug,
+        });
+
+        if (res.success && res.link) {
+          resolvedSlug = res.link.slug || slug;
+          isReused = false;
+        } else {
+          logger.warn(
+            `Failed to auto-shorten URL for ${message.author.tag}: ${res.error}`,
+          );
+        }
+      }
+
+      if (resolvedSlug) {
         const shortenedUrl = sinkClient.getFullShortUrl(resolvedSlug);
         shortenedItems.push({
           originalUrl,
           shortenedUrl,
           slug: resolvedSlug,
+          isReused,
         });
-      } else {
-        logger.warn(
-          `Failed to auto-shorten URL for ${message.author.tag}: ${res.error}`,
-        );
       }
     } catch (err) {
       logger.error("Error auto-shortening URL:", err);
