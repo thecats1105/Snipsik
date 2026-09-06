@@ -382,4 +382,75 @@ describe("Auto-Shortening Existing URL Reuse", () => {
       `First: https://s.japsik.com/${existingSlug} Second: https://s.japsik.com/${newSlug}`,
     );
   });
+
+  it("deduplicates in-flight creation when concurrent messages are received with the exact same URL from the same user", async () => {
+    const newSlug = `concurrent-${testUserHash}`;
+
+    // Simulate async delay in createLink
+    sinkClient.searchLinks = mock(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return { success: true, list: [], total: 0, status: 200 };
+    });
+
+    const createLinkMock = mock(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return {
+        success: true,
+        link: {
+          slug: newSlug,
+          url: "https://example.com/concurrent/race/condition",
+        },
+      };
+    });
+    sinkClient.createLink = createLinkMock;
+
+    const mockMessage1 = {
+      author: {
+        id: testUserId,
+        bot: false,
+        tag: "Tester#0001",
+        createDM: async () => ({
+          send: mock(async () => ({
+            flags: { has: () => true },
+            suppressEmbeds: mock(async () => {}),
+          })),
+        }),
+      },
+      guildId: "guild-1",
+      guild: {},
+      channelId: "channel-1",
+      channel: { name: "general" },
+      content: "Race 1: https://example.com/concurrent/race/condition",
+      url: "https://discord.com/channels/guild-1/channel-1/msg-1",
+    };
+
+    const mockMessage2 = {
+      author: {
+        id: testUserId,
+        bot: false,
+        tag: "Tester#0001",
+        createDM: async () => ({
+          send: mock(async () => ({
+            flags: { has: () => true },
+            suppressEmbeds: mock(async () => {}),
+          })),
+        }),
+      },
+      guildId: "guild-1",
+      guild: {},
+      channelId: "channel-1",
+      channel: { name: "general" },
+      content: "Race 2: https://example.com/concurrent/race/condition",
+      url: "https://discord.com/channels/guild-1/channel-1/msg-2",
+    };
+
+    // Fire both concurrent messages simultaneously
+    await Promise.all([
+      onMessageCreate(mockMessage1 as any),
+      onMessageCreate(mockMessage2 as any),
+    ]);
+
+    // createLink must be called only once thanks to in-flight deduplication
+    expect(createLinkMock).toHaveBeenCalledTimes(1);
+  });
 });

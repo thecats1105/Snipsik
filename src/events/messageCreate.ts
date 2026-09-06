@@ -10,6 +10,128 @@ import { logger } from "@/utils/logger";
 // URL extraction regex
 const URL_REGEX = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
 
+/**
+ * Sanitizes a URL for logging by removing sensitive query parameters and fragments.
+ *
+ * @param rawUrl - The raw target URL.
+ * @returns The sanitized URL string containing only the origin and pathname.
+ */
+function sanitizeUrlForLog(rawUrl: string): string {
+  try {
+    const parsed = new URL(rawUrl);
+    return `${parsed.protocol}//${parsed.host}${parsed.pathname}`;
+  } catch {
+    return "[invalid-url]";
+  }
+}
+
+/**
+ * In-flight short link lookups/creations keyed by `${userId}:${originalUrl}`
+ * to prevent duplicate link generation during concurrent messages.
+ */
+const inFlightShortens = new Map<
+  string,
+  Promise<{ slug: string; isReused: boolean } | null>
+>();
+
+/**
+ * Resolves a short link for a given URL and user, either by reusing an existing
+ * active link owned by the user or creating a new one. Deduplicates concurrent calls.
+ *
+ * @param userId - Discord user snowflake ID
+ * @param userTag - Discord user display tag for logging
+ * @param originalUrl - Target URL to shorten or reuse
+ * @returns The resolved slug and whether it was reused, or null on failure
+ */
+async function resolveShortLink(
+  userId: string,
+  userTag: string,
+  originalUrl: string,
+): Promise<{ slug: string; isReused: boolean } | null> {
+  const inFlightKey = `${userId}:${originalUrl}`;
+  const existingPromise = inFlightShortens.get(inFlightKey);
+  if (existingPromise) {
+    return existingPromise;
+  }
+
+  const promise = (async () => {
+    let resolvedSlug: string | null = null;
+    let isReused = false;
+
+    // 1. Check if an active short link already exists for this user and URL
+    try {
+      const searchRes = await sinkClient.searchLinks({
+        url: originalUrl,
+        status: "active",
+        limit: 20,
+      });
+
+      if (searchRes.success && searchRes.list && searchRes.list.length > 0) {
+        const userLinks = searchRes.list.filter((l) =>
+          verifyOwnership(l.slug, userId),
+        );
+
+        if (userLinks.length > 0) {
+          userLinks.sort((a, b) => {
+            const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return timeB - timeA;
+          });
+
+          const existingLink = userLinks[0];
+          if (existingLink && existingLink.slug) {
+            resolvedSlug = existingLink.slug;
+            isReused = true;
+            logger.info(
+              `Reusing existing short link /${resolvedSlug} for ${userTag} (${sanitizeUrlForLog(originalUrl)})`,
+            );
+          }
+        }
+      }
+    } catch (searchErr) {
+      logger.warn(
+        `Failed to search existing links for URL ${sanitizeUrlForLog(originalUrl)}, falling back to creation:`,
+        searchErr,
+      );
+    }
+
+    // 2. If no existing active link was found, create a new one
+    if (!resolvedSlug) {
+      const slug = generateSlug(userId);
+      const res = await sinkClient.createLink({
+        url: originalUrl,
+        slug,
+      });
+
+      if (res.success && res.link) {
+        resolvedSlug = res.link.slug || slug;
+        isReused = false;
+      } else {
+        logger.warn(`Failed to auto-shorten URL for ${userTag}: ${res.error}`);
+      }
+    }
+
+    if (resolvedSlug) {
+      return { slug: resolvedSlug, isReused };
+    }
+    return null;
+  })();
+
+  inFlightShortens.set(inFlightKey, promise);
+  try {
+    return await promise;
+  } finally {
+    inFlightShortens.delete(inFlightKey);
+  }
+}
+
+/**
+ * Handles the `messageCreate` Discord event.
+ * Detects URLs in watched channels, reuses or creates short links via Sink API,
+ * and sends direct messages (DM) with shortened URLs according to user preferences.
+ *
+ * @param message - The Discord message event payload.
+ */
 export async function onMessageCreate(message: Message): Promise<void> {
   // Ignore bot messages and webhooks
   if (message.author.bot || message.webhookId) return;
@@ -79,71 +201,19 @@ export async function onMessageCreate(message: Message): Promise<void> {
 
   for (const originalUrl of validUrls) {
     try {
-      let resolvedSlug: string | null = null;
-      let isReused = false;
+      const result = await resolveShortLink(
+        message.author.id,
+        message.author.tag,
+        originalUrl,
+      );
 
-      // 1. Check if an active short link already exists for this user and URL
-      try {
-        const searchRes = await sinkClient.searchLinks({
-          url: originalUrl,
-          status: "active",
-          limit: 20,
-        });
-
-        if (searchRes.success && searchRes.list && searchRes.list.length > 0) {
-          const userLinks = searchRes.list.filter((l) =>
-            verifyOwnership(l.slug, message.author.id),
-          );
-
-          if (userLinks.length > 0) {
-            userLinks.sort((a, b) => {
-              const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-              const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-              return timeB - timeA;
-            });
-
-            const existingLink = userLinks[0];
-            if (existingLink && existingLink.slug) {
-              resolvedSlug = existingLink.slug;
-              isReused = true;
-              logger.info(
-                `Reusing existing short link /${resolvedSlug} for ${message.author.tag} (${originalUrl})`,
-              );
-            }
-          }
-        }
-      } catch (searchErr) {
-        logger.warn(
-          `Failed to search existing links for URL ${originalUrl}, falling back to creation:`,
-          searchErr,
-        );
-      }
-
-      // 2. If no existing active link was found, create a new one
-      if (!resolvedSlug) {
-        const slug = generateSlug(message.author.id);
-        const res = await sinkClient.createLink({
-          url: originalUrl,
-          slug,
-        });
-
-        if (res.success && res.link) {
-          resolvedSlug = res.link.slug || slug;
-          isReused = false;
-        } else {
-          logger.warn(
-            `Failed to auto-shorten URL for ${message.author.tag}: ${res.error}`,
-          );
-        }
-      }
-
-      if (resolvedSlug) {
-        const shortenedUrl = sinkClient.getFullShortUrl(resolvedSlug);
+      if (result) {
+        const shortenedUrl = sinkClient.getFullShortUrl(result.slug);
         shortenedItems.push({
           originalUrl,
           shortenedUrl,
-          slug: resolvedSlug,
-          isReused,
+          slug: result.slug,
+          isReused: result.isReused,
         });
       }
     } catch (err) {
