@@ -27,7 +27,7 @@ export const COLORS = {
 };
 
 export interface V2MessageView {
-  flags: MessageFlags.IsComponentsV2;
+  flags: number;
   components: ContainerBuilder[];
 }
 
@@ -383,7 +383,10 @@ export const ui = {
       new TextDisplayBuilder().setContent(safeDescription(description)),
     );
 
-    return { flags: MessageFlags.IsComponentsV2, components: [container] };
+    return {
+      flags: MessageFlags.IsComponentsV2 | MessageFlags.SuppressEmbeds,
+      components: [container],
+    };
   },
 
   /**

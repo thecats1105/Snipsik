@@ -163,7 +163,10 @@ describe("Discord Components v2 UI Modules", () => {
         "https://discord.com/channels/1/2/3",
         "replace",
       );
-      expect(view.flags).toBe(MessageFlags.IsComponentsV2);
+      expect(view.flags).toBe(
+        MessageFlags.IsComponentsV2 | MessageFlags.SuppressEmbeds,
+      );
+      expect((view.flags & MessageFlags.SuppressEmbeds) !== 0).toBe(true);
       expect(view.components.length).toBe(1);
 
       const json = view.components[0].toJSON();
