@@ -110,18 +110,18 @@ export async function onMessageCreate(message: Message): Promise<void> {
     let embedSent = false;
     let textSentCount = 0;
 
-    // 1. Send DM Card (Overview embed)
+    // 1. Send DM Card (Components v2 Container Card)
     try {
-      const dmEmbed = ui.createWatchDmCard(
+      const dmView = ui.createWatchDmCard(
         shortenedItems,
         message.url,
         userConfig.dmFormat,
       );
-      await dmChannel.send({ embeds: [dmEmbed] });
+      await dmChannel.send(dmView);
       embedSent = true;
     } catch (embedErr) {
       logger.warn(
-        `Failed to send watch DM embed card to ${message.author.tag}:`,
+        `Failed to send watch DM card to ${message.author.tag}:`,
         embedErr,
       );
     }
