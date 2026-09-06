@@ -51,9 +51,10 @@ export async function onInteractionCreate(
           : undefined;
         if (!slug) {
           await interaction.reply({
-            embeds: [
-              ui.createErrorMessage("오류", "수정할 링크를 먼저 선택해주세요."),
-            ],
+            ...ui.createErrorMessage(
+              "오류",
+              "수정할 링크를 먼저 선택해주세요.",
+            ),
             ephemeral: true,
           });
           return;
@@ -61,12 +62,10 @@ export async function onInteractionCreate(
 
         if (!verifyOwnership(slug, interaction.user.id)) {
           await interaction.reply({
-            embeds: [
-              ui.createErrorMessage(
-                "권한 없음",
-                "이 링크를 수정할 권한이 없습니다.",
-              ),
-            ],
+            ...ui.createErrorMessage(
+              "권한 없음",
+              "이 링크를 수정할 권한이 없습니다.",
+            ),
             ephemeral: true,
           });
           return;
@@ -75,12 +74,10 @@ export async function onInteractionCreate(
         const linkRes = await sinkClient.getLink(slug);
         if (!linkRes.success || !linkRes.link) {
           await interaction.reply({
-            embeds: [
-              ui.createErrorMessage(
-                "오류",
-                linkRes.error || "링크 정보를 가져올 수 없습니다.",
-              ),
-            ],
+            ...ui.createErrorMessage(
+              "오류",
+              linkRes.error || "링크 정보를 가져올 수 없습니다.",
+            ),
             ephemeral: true,
           });
           return;
@@ -98,9 +95,10 @@ export async function onInteractionCreate(
           : undefined;
         if (!slug) {
           await interaction.reply({
-            embeds: [
-              ui.createErrorMessage("오류", "삭제할 링크를 먼저 선택해주세요."),
-            ],
+            ...ui.createErrorMessage(
+              "오류",
+              "삭제할 링크를 먼저 선택해주세요.",
+            ),
             ephemeral: true,
           });
           return;
@@ -108,12 +106,10 @@ export async function onInteractionCreate(
 
         if (!verifyOwnership(slug, interaction.user.id)) {
           await interaction.reply({
-            embeds: [
-              ui.createErrorMessage(
-                "권한 없음",
-                "이 링크를 삭제할 권한이 없습니다.",
-              ),
-            ],
+            ...ui.createErrorMessage(
+              "권한 없음",
+              "이 링크를 삭제할 권한이 없습니다.",
+            ),
             ephemeral: true,
           });
           return;
@@ -131,12 +127,10 @@ export async function onInteractionCreate(
           : undefined;
         if (!slug || !verifyOwnership(slug, interaction.user.id)) {
           await interaction.reply({
-            embeds: [
-              ui.createErrorMessage(
-                "권한 없음",
-                "이 링크를 삭제할 권한이 없습니다.",
-              ),
-            ],
+            ...ui.createErrorMessage(
+              "권한 없음",
+              "이 링크를 삭제할 권한이 없습니다.",
+            ),
             ephemeral: true,
           });
           return;
@@ -145,12 +139,10 @@ export async function onInteractionCreate(
         const delRes = await sinkClient.deleteLink(slug);
         if (!delRes.success) {
           await interaction.reply({
-            embeds: [
-              ui.createErrorMessage(
-                "삭제 실패",
-                delRes.error || "오류가 발생했습니다.",
-              ),
-            ],
+            ...ui.createErrorMessage(
+              "삭제 실패",
+              delRes.error || "오류가 발생했습니다.",
+            ),
             ephemeral: true,
           });
           return;
@@ -328,12 +320,10 @@ export async function onInteractionCreate(
 
         if (url && url.length > 2048) {
           await interaction.followUp({
-            embeds: [
-              ui.createErrorMessage(
-                "URL 길이 초과",
-                "URL 길이는 최대 2,048자까지 허용됩니다.",
-              ),
-            ],
+            ...ui.createErrorMessage(
+              "URL 길이 초과",
+              "URL 길이는 최대 2,048자까지 허용됩니다.",
+            ),
             ephemeral: true,
           });
           return;
@@ -353,12 +343,10 @@ export async function onInteractionCreate(
 
         if (!res.success) {
           await interaction.followUp({
-            embeds: [
-              ui.createErrorMessage(
-                "링크 생성 실패",
-                res.error || "오류가 발생했습니다.",
-              ),
-            ],
+            ...ui.createErrorMessage(
+              "링크 생성 실패",
+              res.error || "오류가 발생했습니다.",
+            ),
             ephemeral: true,
           });
           return;
@@ -380,12 +368,10 @@ export async function onInteractionCreate(
 
         if (!slug || !verifyOwnership(slug, interaction.user.id)) {
           await interaction.followUp({
-            embeds: [
-              ui.createErrorMessage(
-                "권한 없음",
-                "이 링크를 수정할 권한이 없습니다.",
-              ),
-            ],
+            ...ui.createErrorMessage(
+              "권한 없음",
+              "이 링크를 수정할 권한이 없습니다.",
+            ),
             ephemeral: true,
           });
           return;
@@ -401,12 +387,10 @@ export async function onInteractionCreate(
 
         if (url && url.length > 2048) {
           await interaction.followUp({
-            embeds: [
-              ui.createErrorMessage(
-                "URL 길이 초과",
-                "URL 길이는 최대 2,048자까지 허용됩니다.",
-              ),
-            ],
+            ...ui.createErrorMessage(
+              "URL 길이 초과",
+              "URL 길이는 최대 2,048자까지 허용됩니다.",
+            ),
             ephemeral: true,
           });
           return;
@@ -435,12 +419,10 @@ export async function onInteractionCreate(
 
         if (!res.success) {
           await interaction.followUp({
-            embeds: [
-              ui.createErrorMessage(
-                "링크 수정 실패",
-                res.error || "오류가 발생했습니다.",
-              ),
-            ],
+            ...ui.createErrorMessage(
+              "링크 수정 실패",
+              res.error || "오류가 발생했습니다.",
+            ),
             ephemeral: true,
           });
           return;
@@ -455,7 +437,7 @@ export async function onInteractionCreate(
   } catch (error) {
     logger.error("Error in onInteractionCreate:", error);
     try {
-      const errEmbed = ui.createErrorMessage(
+      const errView = ui.createErrorMessage(
         "인터랙션 처리 오류",
         error instanceof Error
           ? error.message
@@ -463,9 +445,9 @@ export async function onInteractionCreate(
       );
       if (interaction.isRepliable()) {
         if (interaction.deferred || interaction.replied) {
-          await interaction.followUp({ embeds: [errEmbed], ephemeral: true });
+          await interaction.followUp({ ...errView, ephemeral: true });
         } else {
-          await interaction.reply({ embeds: [errEmbed], ephemeral: true });
+          await interaction.reply({ ...errView, ephemeral: true });
         }
       }
     } catch {

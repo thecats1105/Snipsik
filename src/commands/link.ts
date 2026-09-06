@@ -476,7 +476,7 @@ export const linkCommand: Command = {
             "URL 길이 초과",
             "URL 길이는 최대 2,048자까지 허용됩니다.",
           );
-          await interaction.editReply({ embeds: [errEmbed] });
+          await interaction.editReply(errEmbed);
           return;
         }
 
@@ -499,7 +499,7 @@ export const linkCommand: Command = {
             "단축 링크 생성 실패",
             res.error || "알 수 없는 오류가 발생했습니다.",
           );
-          await interaction.editReply({ embeds: [errEmbed] });
+          await interaction.editReply(errEmbed);
           return;
         }
 
@@ -525,7 +525,7 @@ export const linkCommand: Command = {
             "URL 길이 초과",
             "URL 길이는 최대 2,048자까지 허용됩니다.",
           );
-          await interaction.editReply({ embeds: [errEmbed] });
+          await interaction.editReply(errEmbed);
           return;
         }
 
@@ -534,7 +534,7 @@ export const linkCommand: Command = {
             "슬러그 길이 초과",
             "슬러그 길이는 최대 2,048자까지 허용됩니다.",
           );
-          await interaction.editReply({ embeds: [errEmbed] });
+          await interaction.editReply(errEmbed);
           return;
         }
 
@@ -544,7 +544,7 @@ export const linkCommand: Command = {
             "커스텀 슬러그 생성 권한 없음",
             validation.error || "커스텀 슬러그를 생성할 수 없습니다.",
           );
-          await interaction.editReply({ embeds: [errEmbed] });
+          await interaction.editReply(errEmbed);
           return;
         }
 
@@ -565,7 +565,7 @@ export const linkCommand: Command = {
             "커스텀 단축 링크 생성 실패",
             res.error || "이미 사용 중인 슬러그이거나 오류가 발생했습니다.",
           );
-          await interaction.editReply({ embeds: [errEmbed] });
+          await interaction.editReply(errEmbed);
           return;
         }
 
@@ -597,7 +597,7 @@ export const linkCommand: Command = {
             "목록 조회 실패",
             res.error || "오류가 발생했습니다.",
           );
-          await interaction.editReply({ embeds: [errEmbed] });
+          await interaction.editReply(errEmbed);
           return;
         }
 
@@ -630,7 +630,7 @@ export const linkCommand: Command = {
               ? `태그 \`#${inputTag.replace(/^#/, "")}\`에 해당하는 내 단축 링크가 없습니다.`
               : "아직 생성한 단축 링크가 없습니다. `/link create` 또는 `/link dashboard`로 생성해보세요!",
           );
-          await interaction.editReply({ embeds: [infoEmbed] });
+          await interaction.editReply(infoEmbed);
           return;
         }
 
@@ -653,7 +653,7 @@ export const linkCommand: Command = {
           lines.join("\n\n"),
         );
 
-        await interaction.editReply({ embeds: [listEmbed] });
+        await interaction.editReply(listEmbed);
         return;
       }
 
@@ -667,7 +667,7 @@ export const linkCommand: Command = {
             "접근 권한 없음",
             `\`/${slug}\` 링크의 통계를 조회할 권한이 없습니다. 본인이 생성한 링크만 조회할 수 있습니다.`,
           );
-          await interaction.editReply({ embeds: [errEmbed] });
+          await interaction.editReply(errEmbed);
           return;
         }
 
@@ -677,7 +677,7 @@ export const linkCommand: Command = {
             "통계 조회 실패",
             res.error || "해당 링크의 통계 정보를 찾을 수 없습니다.",
           );
-          await interaction.editReply({ embeds: [errEmbed] });
+          await interaction.editReply(errEmbed);
           return;
         }
 
@@ -696,7 +696,7 @@ export const linkCommand: Command = {
             "삭제 권한 없음",
             `\`/${slug}\` 링크를 삭제할 권한이 없습니다. 본인이 생성한 링크만 삭제할 수 있습니다.`,
           );
-          await interaction.editReply({ embeds: [errEmbed] });
+          await interaction.editReply(errEmbed);
           return;
         }
 
@@ -706,7 +706,7 @@ export const linkCommand: Command = {
             "삭제 실패",
             res.error || "링크 삭제 중 오류가 발생했습니다.",
           );
-          await interaction.editReply({ embeds: [errEmbed] });
+          await interaction.editReply(errEmbed);
           return;
         }
 
@@ -714,7 +714,7 @@ export const linkCommand: Command = {
           "링크 삭제 완료",
           `단축 링크 \`/${slug}\`이(가) 성공적으로 영구 삭제되었습니다.`,
         );
-        await interaction.editReply({ embeds: [successEmbed] });
+        await interaction.editReply(successEmbed);
         return;
       }
 
@@ -729,13 +729,13 @@ export const linkCommand: Command = {
             "웹사이트 정상 작동",
             `**타겟 URL:** ${checkResult.url}\n**HTTP 상태:** \`${checkResult.status} ${checkResult.statusText}\`\n**응답 속도:** \`${checkResult.responseTimeMs}ms\`\n**콘텐츠 타입:** \`${checkResult.contentType || "알 수 없음"}\``,
           );
-          await interaction.editReply({ embeds: [successEmbed] });
+          await interaction.editReply(successEmbed);
         } else {
           const errEmbed = ui.createErrorMessage(
             "웹사이트 연결 불가 또는 오류",
             `**타겟 URL:** ${checkResult.url}\n**상태:** \`${checkResult.status !== null ? checkResult.status : "연결 실패"}\` (${checkResult.statusText})\n**경과 시간:** \`${checkResult.responseTimeMs}ms\``,
           );
-          await interaction.editReply({ embeds: [errEmbed] });
+          await interaction.editReply(errEmbed);
         }
         return;
       }
@@ -748,9 +748,9 @@ export const linkCommand: Command = {
           : "알 수 없는 오류가 발생했습니다.",
       );
       if (interaction.deferred || interaction.replied) {
-        await interaction.editReply({ embeds: [errEmbed] });
+        await interaction.editReply(errEmbed);
       } else {
-        await interaction.reply({ embeds: [errEmbed], ephemeral: true });
+        await interaction.reply({ ...errEmbed, ephemeral: true });
       }
     }
   },
@@ -768,7 +768,7 @@ async function handleWatchCommand(
       "서버 전용 명령어",
       "감시 명령어는 디스코드 서버 내에서만 실행할 수 있습니다.",
     );
-    await interaction.reply({ embeds: [errEmbed], ephemeral: true });
+    await interaction.reply({ ...errEmbed, ephemeral: true });
     return;
   }
 
@@ -782,7 +782,7 @@ async function handleWatchCommand(
       "권한 부족",
       "이 명령어를 실행하려면 `서버 관리(ManageGuild)` 권한이 필요합니다.",
     );
-    await interaction.reply({ embeds: [errEmbed], ephemeral: true });
+    await interaction.reply({ ...errEmbed, ephemeral: true });
     return;
   }
 
@@ -801,7 +801,7 @@ async function handleWatchCommand(
         "감시 채널 등록 실패",
         res.error || "오류가 발생했습니다.",
       );
-      await interaction.editReply({ embeds: [errEmbed] });
+      await interaction.editReply(errEmbed);
       return;
     }
 
@@ -809,7 +809,7 @@ async function handleWatchCommand(
       "감시 채널 등록 완료",
       `<#${channel.id}> 채널이 URL 자동 단축 감시 대상에 등록되었습니다.\n이제 해당 채널에 긴 URL이 올라오면 작성자의 DM으로 즉시 단축 URL이 전송됩니다.`,
     );
-    await interaction.editReply({ embeds: [successEmbed] });
+    await interaction.editReply(successEmbed);
     return;
   }
 
@@ -825,7 +825,7 @@ async function handleWatchCommand(
         "감시 채널 해제 실패",
         res.error || "오류가 발생했습니다.",
       );
-      await interaction.editReply({ embeds: [errEmbed] });
+      await interaction.editReply(errEmbed);
       return;
     }
 
@@ -833,7 +833,7 @@ async function handleWatchCommand(
       "감시 채널 해제 완료",
       `<#${channel.id}> 채널이 URL 감시 대상에서 해제되었습니다.`,
     );
-    await interaction.editReply({ embeds: [successEmbed] });
+    await interaction.editReply(successEmbed);
     return;
   }
 
@@ -845,7 +845,7 @@ async function handleWatchCommand(
         "감시 대상 채널 없음",
         "현재 서버에 등록된 URL 감시 채널이 없습니다.\n`/link watch add <channel>`로 등록할 수 있습니다.",
       );
-      await interaction.editReply({ embeds: [infoEmbed] });
+      await interaction.editReply(infoEmbed);
       return;
     }
 
@@ -860,7 +860,7 @@ async function handleWatchCommand(
       `현재 서버의 감시 채널 목록 (${channels.length}개)`,
       channelListStr,
     );
-    await interaction.editReply({ embeds: [listEmbed] });
+    await interaction.editReply(listEmbed);
     return;
   }
 }
@@ -877,7 +877,7 @@ async function handleAdminCommand(
       "관리자 권한 필요",
       "이 명령어는 `.env`의 `ADMIN_USER_IDS`에 등록된 봇 관리자만 실행할 수 있습니다.",
     );
-    await interaction.reply({ embeds: [errEmbed], ephemeral: true });
+    await interaction.reply({ ...errEmbed, ephemeral: true });
     return;
   }
 
@@ -932,7 +932,7 @@ async function handleAdminCommand(
       "Sink 인스턴스 전체 통계 현황",
       desc,
     );
-    await interaction.editReply({ embeds: [overviewEmbed] });
+    await interaction.editReply(overviewEmbed);
     return;
   }
 
@@ -971,7 +971,7 @@ async function handleAdminCommand(
         "목록 조회 실패",
         res.error || "오류가 발생했습니다.",
       );
-      await interaction.editReply({ embeds: [errEmbed] });
+      await interaction.editReply(errEmbed);
       return;
     }
 
@@ -1007,7 +1007,7 @@ async function handleAdminCommand(
             ? `태그 \`#${inputTag.replace(/^#/, "")}\`에 해당하는 링크가 없습니다.`
             : "인스턴스에 등록된 링크가 없습니다.",
       );
-      await interaction.editReply({ embeds: [infoEmbed] });
+      await interaction.editReply(infoEmbed);
       return;
     }
 
@@ -1036,7 +1036,7 @@ async function handleAdminCommand(
       `전체 링크 목록 (총 ${totalCountLabel} / 페이지 ${currentPage}/${totalPages})`,
       lines.join("\n\n"),
     );
-    await interaction.editReply({ embeds: [listEmbed] });
+    await interaction.editReply(listEmbed);
     return;
   }
 
@@ -1060,7 +1060,7 @@ async function handleAdminCommand(
         "유저 링크 조회 실패",
         res.error || "오류가 발생했습니다.",
       );
-      await interaction.editReply({ embeds: [errEmbed] });
+      await interaction.editReply(errEmbed);
       return;
     }
 
@@ -1091,7 +1091,7 @@ async function handleAdminCommand(
           ? `<@${targetUser.id}> 님이 생성한 링크 중 태그 \`#${inputTag.replace(/^#/, "")}\`에 해당하는 링크가 없습니다.`
           : `<@${targetUser.id}> (\`userHash: ${userHash}\`) 유저가 생성한 링크가 없습니다.`,
       );
-      await interaction.editReply({ embeds: [infoEmbed] });
+      await interaction.editReply(infoEmbed);
       return;
     }
 
@@ -1117,7 +1117,7 @@ async function handleAdminCommand(
       `${userDisplayName} 님의 링크 목록 (총 ${userLinks.length}개 / 페이지 ${currentPage}/${totalPages})`,
       headerInfo + lines.join("\n\n"),
     );
-    await interaction.editReply({ embeds: [listEmbed] });
+    await interaction.editReply(listEmbed);
     return;
   }
 
@@ -1132,7 +1132,7 @@ async function handleAdminCommand(
         "관리자 강제 삭제 실패",
         res.error || "링크 삭제 중 오류가 발생했습니다.",
       );
-      await interaction.editReply({ embeds: [errEmbed] });
+      await interaction.editReply(errEmbed);
       return;
     }
 
@@ -1140,7 +1140,7 @@ async function handleAdminCommand(
       "관리자 강제 삭제 완료",
       `단축 링크 \`/${cleanSlug}\`이(가) 관리자 권한으로 영구 삭제되었습니다.`,
     );
-    await interaction.editReply({ embeds: [successEmbed] });
+    await interaction.editReply(successEmbed);
     return;
   }
 }
