@@ -8,6 +8,13 @@
       "when": 1788624078400,
       "tag": "0000_tiny_the_twelve",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788668541000,
+      "tag": "0001_add_user_configs",
+      "breakpoints": true
     }
   ]
 }
