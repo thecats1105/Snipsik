@@ -19,7 +19,45 @@ import { convertToFixupxUrl, isTwitterDomain } from '@/utils/twitter'
 import { ui } from '@/utils/ui'
 
 const URL_START_REGEX = /https?:\/\//gi
-const URL_TERMINATORS = new Set(['<', '>', '"', '^', '`', '{', '}', '\\'])
+const URL_TERMINATORS = new Set([
+  '<',
+  '>',
+  '"',
+  '^',
+  '`',
+  '{',
+  '}',
+  '\\',
+  '’',
+  '”',
+  '。',
+  '、',
+  '！',
+  '？',
+  '…',
+  '：',
+  '；'
+])
+const TRAILING_PUNCTUATION = new Set([
+  '.',
+  ',',
+  '!',
+  '?',
+  ';',
+  ':',
+  "'",
+  '"',
+  '’',
+  '”',
+  '。',
+  '、',
+  '！',
+  '？',
+  '…',
+  '：',
+  '；'
+])
+const UNMATCHED_MARKDOWN_DELIMITERS = new Set(['*', '_', '~'])
 const SearchLimitSchema = z.number().int().min(1).max(1_000)
 const EXISTING_LINK_SEARCH_LIMIT = SearchLimitSchema.parse(1_000)
 
@@ -29,11 +67,20 @@ export interface ExtractedDiscordUrl {
   end: number
 }
 
-function isInsideSpoiler(content: string, position: number): boolean {
+function isInsideSpoiler(
+  content: string,
+  position: number,
+  extractedRanges: Array<{ start: number; end: number }> = []
+): boolean {
   let delimiterCount = 0
   let cursor = 0
   while ((cursor = content.indexOf('||', cursor)) !== -1 && cursor < position) {
-    delimiterCount++
+    const isInsideExtractedUrl = extractedRanges.some(
+      r => cursor >= r.start && cursor + 2 <= r.end
+    )
+    if (!isInsideExtractedUrl) {
+      delimiterCount++
+    }
     cursor += 2
   }
   return delimiterCount % 2 === 1
@@ -49,7 +96,7 @@ export function extractUrlsFromDiscordMarkdown(
 
   while ((match = regex.exec(content)) !== null) {
     const start = match.index
-    const spoiler = isInsideSpoiler(content, start)
+    const spoiler = isInsideSpoiler(content, start, results)
     let cursor = regex.lastIndex
     let parenDepth = 0
     let bracketDepth = 0
@@ -85,6 +132,20 @@ export function extractUrlsFromDiscordMarkdown(
       cursor++
     }
 
+    // Trim trailing punctuation and unmatched markdown delimiters
+    while (cursor > start) {
+      const lastChar = content[cursor - 1]
+      if (
+        lastChar &&
+        (TRAILING_PUNCTUATION.has(lastChar) ||
+          UNMATCHED_MARKDOWN_DELIMITERS.has(lastChar))
+      ) {
+        cursor--
+      } else {
+        break
+      }
+    }
+
     const url = content.slice(start, cursor)
     if (url.length > match[0].length) {
       results.push({ url, start, end: cursor })
@@ -93,48 +154,6 @@ export function extractUrlsFromDiscordMarkdown(
   }
 
   return results
-}
-
-/**
- * Trims trailing delimiters and formatting characters from extracted URLs.
- * Handles Discord spoiler tags (||), unbalanced closing parentheses/brackets,
- * while preserving valid trailing pipe characters in query data and URL content
- * unless they form a verified closing spoiler delimiter.
- *
- * @param rawUrl - The raw extracted URL candidate.
- * @param isEnclosedInSpoiler - Whether the URL match was immediately preceded by a Discord spoiler tag (||).
- * @returns The sanitized URL string.
- */
-export function cleanExtractedUrl(
-  rawUrl: string,
-  isEnclosedInSpoiler = false
-): string {
-  let url = rawUrl
-
-  let changed = true
-  while (changed) {
-    changed = false
-    while (url.endsWith(')') || url.endsWith(']')) {
-      const lastChar = url.slice(-1)
-      const openChar = lastChar === ')' ? '(' : '['
-      const openCount = (url.match(new RegExp(`\\${openChar}`, 'g')) || [])
-        .length
-      const closeCount = (url.match(new RegExp(`\\${lastChar}`, 'g')) || [])
-        .length
-      if (closeCount > openCount) {
-        url = url.slice(0, -1)
-        changed = true
-      } else {
-        break
-      }
-    }
-    if (isEnclosedInSpoiler && url.endsWith('||')) {
-      url = url.slice(0, -2)
-      changed = true
-    }
-  }
-
-  return url
 }
 
 /**
@@ -388,6 +407,9 @@ export async function onMessageCreate(message: Message): Promise<void> {
           continue
         }
         // Exclude non-status Twitter links (e.g. profiles, search) when fixupx is enabled
+        logger.debug(
+          `Skipping non-status Twitter link for ${message.author.tag}: ${sanitizeUrlForLog(rawUrl)}`
+        )
         continue
       }
 
@@ -485,11 +507,13 @@ export async function onMessageCreate(message: Message): Promise<void> {
     // 2. Send 2nd message based on user format preference
     if (userConfig.dmFormat === 'replace') {
       // Reconstructed message with URLs replaced
-      const reconstructed = userConfigService.replaceUrlsInText(
-        content,
-        processedItems
-      )
-      const chunks = userConfigService.chunkText(reconstructed, 2000)
+      const { text: reconstructed, spans } =
+        userConfigService.replaceUrlsInTextWithSpans(
+          content,
+          processedItems,
+          rawMatches
+        )
+      const chunks = userConfigService.chunkText(reconstructed, 2000, spans)
 
       for (const chunk of chunks) {
         try {

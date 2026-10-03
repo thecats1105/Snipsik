@@ -332,6 +332,56 @@ describe('UserConfigService Unit Tests', () => {
         '그냥 일반 텍스트'
       )
     })
+
+    it('does not corrupt unshortened prefix-sharing URLs (R06)', () => {
+      const shortUrl = 'https://example.com/aaa'
+      const longUrl = 'https://example.com/aaa/bbb'
+      const original = `두 개 링크: ${shortUrl} 그리고 ${longUrl}`
+
+      // Only the prefix URL was shortened (e.g. shortening the second URL failed)
+      const replacements = [
+        {
+          originalUrl: shortUrl,
+          targetUrl: 'https://s.japsik.com/aaa-short'
+        }
+      ]
+
+      const result = userConfigService.replaceUrlsInText(original, replacements)
+      expect(result).toBe(
+        '두 개 링크: https://s.japsik.com/aaa-short 그리고 https://example.com/aaa/bbb'
+      )
+    })
+
+    it('tracks [start, end] spans of replaced URLs in reconstructed text (R06)', () => {
+      const original =
+        '앞 링크 https://example.com/1 뒤 링크 https://example.com/2 끝'
+      const replacements = [
+        {
+          originalUrl: 'https://example.com/1',
+          targetUrl: 'https://s.japsik.com/short1'
+        },
+        {
+          originalUrl: 'https://example.com/2',
+          targetUrl: 'https://s.japsik.com/short2'
+        }
+      ]
+
+      const { text, spans } = userConfigService.replaceUrlsInTextWithSpans(
+        original,
+        replacements
+      )
+
+      expect(text).toBe(
+        '앞 링크 https://s.japsik.com/short1 뒤 링크 https://s.japsik.com/short2 끝'
+      )
+      expect(spans).toHaveLength(2)
+      expect(text.slice(spans[0][0], spans[0][1])).toBe(
+        'https://s.japsik.com/short1'
+      )
+      expect(text.slice(spans[1][0], spans[1][1])).toBe(
+        'https://s.japsik.com/short2'
+      )
+    })
   })
 
   describe('Discord Message Chunking (chunkText)', () => {
@@ -351,6 +401,38 @@ describe('UserConfigService Unit Tests', () => {
       for (const chunk of chunks) {
         expect(chunk.length).toBeLessThanOrEqual(1000)
       }
+    })
+
+    it('preserves all newlines without loss so chunks.join("") === text (R19)', () => {
+      const text = 'Line 1\n\nLine 2\n\n\nLine 3\nLine 4\n'
+      const chunks = userConfigService.chunkText(text, 10)
+      expect(chunks.length).toBeGreaterThan(1)
+      expect(chunks.join('')).toBe(text)
+    })
+
+    it('avoids splitting URLs across chunk boundaries using protectedSpans (R19)', () => {
+      const url =
+        'https://s.japsik.com/very-long-shortened-url-that-would-otherwise-be-cut'
+      const text = `This is prefix text. ${url} This is suffix text.`
+      const urlStart = text.indexOf(url)
+      const urlEnd = urlStart + url.length
+      const protectedSpans: Array<[number, number]> = [[urlStart, urlEnd]]
+
+      // Set maxLength so that splitIndex without protectedSpans would fall right in the middle of url
+      const maxLength = 80
+      const chunks = userConfigService.chunkText(
+        text,
+        maxLength,
+        protectedSpans
+      )
+
+      expect(chunks.join('')).toBe(text)
+      for (const chunk of chunks) {
+        expect(chunk.length).toBeLessThanOrEqual(maxLength)
+      }
+      // URL must not be split across chunks: one of the chunks must contain the full URL
+      const hasFullUrl = chunks.some(chunk => chunk.includes(url))
+      expect(hasFullUrl).toBe(true)
     })
   })
 

@@ -564,8 +564,158 @@ class UserConfigService {
   }
 
   /**
+   * Replaces original URLs with shortened or transformed URLs in the original message content,
+   * tracking the resulting [start, end] spans of the replaced URLs in the reconstructed text.
+   * Performs replacement using exact URL matches or offsets, preventing substring/prefix corruption.
+   */
+  replaceUrlsInTextWithSpans(
+    content: string,
+    replacements: Array<{
+      originalUrl: string
+      shortenedUrl?: string
+      targetUrl?: string
+      start?: number
+      end?: number
+    }>,
+    matches?: Array<{ url: string; start: number; end: number }>
+  ): { text: string; spans: Array<[number, number]> } {
+    if (!content || replacements.length === 0) {
+      return { text: content, spans: [] }
+    }
+
+    // Build map of originalUrl -> targetUrl
+    const urlToTarget = new Map<string, string>()
+    for (const r of replacements) {
+      const target = r.targetUrl || r.shortenedUrl
+      if (target && !urlToTarget.has(r.originalUrl)) {
+        urlToTarget.set(r.originalUrl, target)
+      }
+    }
+
+    interface PlannedReplacement {
+      start: number
+      end: number
+      targetUrl: string
+    }
+
+    const planned: PlannedReplacement[] = []
+
+    // 1. If explicit valid offsets are provided on replacements
+    const hasExplicitOffsets = replacements.some(
+      r => typeof r.start === 'number' && typeof r.end === 'number'
+    )
+
+    if (hasExplicitOffsets) {
+      for (const r of replacements) {
+        const target = r.targetUrl || r.shortenedUrl
+        if (
+          target &&
+          typeof r.start === 'number' &&
+          typeof r.end === 'number'
+        ) {
+          planned.push({
+            start: r.start,
+            end: r.end,
+            targetUrl: target
+          })
+        }
+      }
+    } else if (matches && matches.length > 0) {
+      // 2. If matches with offsets are provided
+      for (const m of matches) {
+        const target = urlToTarget.get(m.url)
+        if (target) {
+          planned.push({
+            start: m.start,
+            end: m.end,
+            targetUrl: target
+          })
+        }
+      }
+    } else {
+      // 3. Fallback: find exact URL matches in content without corrupting prefixes
+      const sortedEntries = Array.from(urlToTarget.entries()).sort(
+        ([a], [b]) => b.length - a.length
+      )
+
+      const occupied = new Uint8Array(content.length)
+
+      for (const [origUrl, targetUrl] of sortedEntries) {
+        let searchIndex = 0
+        while ((searchIndex = content.indexOf(origUrl, searchIndex)) !== -1) {
+          const matchStart = searchIndex
+          const matchEnd = matchStart + origUrl.length
+          searchIndex += 1
+
+          let isOccupied = false
+          for (let i = matchStart; i < matchEnd; i++) {
+            if (occupied[i]) {
+              isOccupied = true
+              break
+            }
+          }
+          if (isOccupied) continue
+
+          if (matchEnd < content.length) {
+            const nextChar = content[matchEnd]
+            if (nextChar && /[a-zA-Z0-9_\-/~%+=&#?]/.test(nextChar)) {
+              continue
+            }
+          }
+
+          if (matchStart > 0) {
+            const prevChar = content[matchStart - 1]
+            if (prevChar && /[a-zA-Z0-9]/.test(prevChar)) {
+              continue
+            }
+          }
+
+          for (let i = matchStart; i < matchEnd; i++) {
+            occupied[i] = 1
+          }
+
+          planned.push({
+            start: matchStart,
+            end: matchEnd,
+            targetUrl
+          })
+        }
+      }
+    }
+
+    // Sort planned replacements by start ascending
+    planned.sort((a, b) => a.start - b.start)
+
+    // Filter out any overlaps (keeping earlier)
+    const nonOverlapping: PlannedReplacement[] = []
+    let lastEnd = -1
+    for (const p of planned) {
+      if (p.start >= lastEnd) {
+        nonOverlapping.push(p)
+        lastEnd = p.end
+      }
+    }
+
+    let reconstructed = ''
+    const spans: Array<[number, number]> = []
+    let cursor = 0
+
+    for (const item of nonOverlapping) {
+      reconstructed += content.slice(cursor, item.start)
+      const newStart = reconstructed.length
+      reconstructed += item.targetUrl
+      const newEnd = reconstructed.length
+      spans.push([newStart, newEnd])
+      cursor = item.end
+    }
+    reconstructed += content.slice(cursor)
+
+    return { text: reconstructed, spans }
+  }
+
+  /**
    * Replaces original URLs with shortened or transformed URLs in the original message content.
-   * Sorts URLs by descending length (longest first) to prevent substring collision.
+   * Performs replacement using exact URL matches or offsets, preventing substring/prefix corruption.
    */
   replaceUrlsInText(
     content: string,
@@ -573,58 +723,86 @@ class UserConfigService {
       originalUrl: string
       shortenedUrl?: string
       targetUrl?: string
-    }>
+      start?: number
+      end?: number
+    }>,
+    matches?: Array<{ url: string; start: number; end: number }>,
+    outSpans?: Array<[number, number]>
   ): string {
-    if (!content || replacements.length === 0) return content
-
-    // Deduplicate replacements by originalUrl
-    const map = new Map<string, string>()
-    for (const r of replacements) {
-      const target = r.targetUrl || r.shortenedUrl
-      if (target && !map.has(r.originalUrl)) {
-        map.set(r.originalUrl, target)
-      }
-    }
-
-    // Sort by descending URL length
-    const sorted = Array.from(map.entries()).sort(
-      ([urlA], [urlB]) => urlB.length - urlA.length
+    const result = this.replaceUrlsInTextWithSpans(
+      content,
+      replacements,
+      matches
     )
-
-    let result = content
-    for (const [origUrl, targetUrl] of sorted) {
-      result = result.split(origUrl).join(targetUrl)
+    if (outSpans) {
+      outSpans.push(...result.spans)
     }
-
-    return result
+    return result.text
   }
 
   /**
-   * Splits text into safe chunks under Discord's 2,000 character limit.
+   * Splits text into safe chunks under Discord's 2,000 character limit,
+   * preserving all characters (chunks.join('') === text) and avoiding splitting
+   * protected URL spans across chunk boundaries.
    */
-  chunkText(text: string, maxLength = 2000): string[] {
+  chunkText(
+    text: string,
+    maxLength = 2000,
+    protectedSpans?: Array<[number, number]>
+  ): string[] {
     if (text.length <= maxLength) return [text]
 
     const chunks: string[] = []
-    let remaining = text
+    let currentOffset = 0
 
-    while (remaining.length > 0) {
-      if (remaining.length <= maxLength) {
-        chunks.push(remaining)
+    while (currentOffset < text.length) {
+      const remainingLength = text.length - currentOffset
+      if (remainingLength <= maxLength) {
+        chunks.push(text.slice(currentOffset))
         break
       }
 
-      // Try to break at a newline or space
-      let splitIndex = remaining.lastIndexOf('\n', maxLength)
-      if (splitIndex <= 0) {
-        splitIndex = remaining.lastIndexOf(' ', maxLength)
-      }
-      if (splitIndex <= 0) {
-        splitIndex = maxLength
+      const limit = currentOffset + maxLength
+
+      // 1. Try to break after a newline within (currentOffset, limit]
+      let splitIndex = -1
+      const lastNewline = text.lastIndexOf('\n', limit - 1)
+      if (lastNewline >= currentOffset) {
+        splitIndex = lastNewline + 1
       }
 
-      chunks.push(remaining.substring(0, splitIndex))
-      remaining = remaining.substring(splitIndex).replace(/^\n+/, '')
+      // 2. If no newline found, try to break after a space within (currentOffset, limit]
+      if (splitIndex <= currentOffset) {
+        const lastSpace = text.lastIndexOf(' ', limit - 1)
+        if (lastSpace >= currentOffset) {
+          splitIndex = lastSpace + 1
+        }
+      }
+
+      // 3. Fallback: hard break at maxLength
+      if (splitIndex <= currentOffset) {
+        splitIndex = limit
+      }
+
+      // 4. Check protected spans: if splitIndex falls inside [start, end], adjust to start
+      if (protectedSpans && protectedSpans.length > 0) {
+        for (const [spanStart, spanEnd] of protectedSpans) {
+          if (splitIndex > spanStart && splitIndex < spanEnd) {
+            if (spanStart > currentOffset) {
+              splitIndex = spanStart
+            }
+            break
+          }
+        }
+      }
+
+      // Safety check to guarantee forward progress
+      if (splitIndex <= currentOffset) {
+        splitIndex = limit
+      }
+
+      chunks.push(text.slice(currentOffset, splitIndex))
+      currentOffset = splitIndex
     }
 
     return chunks
